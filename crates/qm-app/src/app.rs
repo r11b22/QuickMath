@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use qm_core::AppSettings;
 use qm_render::Theme;
 
+use crate::practice::{PracticeAction, PracticeScreen};
 use crate::theme_style;
 use crate::toasts::Toasts;
 use crate::toolbar::ToolbarAction;
@@ -20,6 +21,8 @@ pub struct QuickMathApp {
     settings: AppSettings,
     theme: Theme,
     screen: Screen,
+    /// The practice game, shown instead of `screen` while open.
+    practice: Option<Box<PracticeScreen>>,
     toasts: Toasts,
     window_title: String,
     /// Set after a close attempt failed to save; the next close quits anyway.
@@ -39,6 +42,7 @@ impl QuickMathApp {
             theme: theme_style::palette(settings.dark_mode),
             settings,
             screen: Screen::Welcome(WelcomeScreen::default()),
+            practice: None,
             toasts: Toasts::default(),
             window_title: String::new(),
             is_close_forced: false,
@@ -117,6 +121,7 @@ impl QuickMathApp {
                 }
             }
             ToolbarAction::ToggleTheme => self.toggle_theme(ctx),
+            ToolbarAction::OpenPractice => self.open_practice(),
             ToolbarAction::Quit => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
             // Handled inside the workspace.
             ToolbarAction::Save
@@ -129,6 +134,7 @@ impl QuickMathApp {
     fn handle_welcome_action(&mut self, action: WelcomeAction) {
         match action {
             WelcomeAction::OpenProjectDialog => self.pick_and_open_project(),
+            WelcomeAction::OpenPractice => self.open_practice(),
             WelcomeAction::OpenProject(root) => self.open_project(&root),
             WelcomeAction::CreateProject { parent, name } => {
                 match welcome::create_project_folder(&parent, &name) {
@@ -137,6 +143,15 @@ impl QuickMathApp {
                 }
             }
         }
+    }
+
+    /// Shows the practice game over the current screen. The open note is
+    /// saved first, because the workspace (and its autosave) pauses meanwhile.
+    fn open_practice(&mut self) {
+        if let Screen::Workspace(workspace) = &mut self.screen {
+            workspace.save_note(&mut self.toasts);
+        }
+        self.practice = Some(Box::new(PracticeScreen::open()));
     }
 
     fn pick_and_open_project(&mut self) {
@@ -169,9 +184,10 @@ impl QuickMathApp {
     }
 
     fn update_window_title(&mut self, ctx: &egui::Context) {
-        let title = match &self.screen {
-            Screen::Workspace(workspace) => workspace.window_title(),
-            Screen::Welcome(_) => "QuickMath".to_string(),
+        let title = match (&self.practice, &self.screen) {
+            (Some(_), _) => "QuickMath — Practice".to_string(),
+            (None, Screen::Workspace(workspace)) => workspace.window_title(),
+            (None, Screen::Welcome(_)) => "QuickMath".to_string(),
         };
         if title != self.window_title {
             ctx.send_viewport_cmd(egui::ViewportCommand::Title(title.clone()));
@@ -180,6 +196,12 @@ impl QuickMathApp {
     }
 
     fn show_screen(&mut self, ui: &mut egui::Ui) {
+        if let Some(practice) = &mut self.practice {
+            if practice.show(ui, &self.theme, &mut self.toasts) == Some(PracticeAction::Close) {
+                self.practice = None;
+            }
+            return;
+        }
         let recent_projects: Vec<PathBuf> = self.settings.recent_projects.clone();
         match &mut self.screen {
             Screen::Workspace(workspace) => {

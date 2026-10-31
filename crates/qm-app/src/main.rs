@@ -9,6 +9,7 @@ mod help_panel;
 mod highlight;
 mod note;
 mod outline;
+mod practice;
 mod preview_pane;
 mod prompts;
 mod status_bar;

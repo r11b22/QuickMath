@@ -31,6 +31,7 @@ pub enum ToolbarAction {
     ToggleTheme,
     ToggleHelp,
     OpenExport,
+    OpenPractice,
     Quit,
 }
 
@@ -111,6 +112,13 @@ fn app_menu(ui: &mut egui::Ui, recent_projects: &[PathBuf], action: &mut Option<
             }
         });
         menu_item(ui, "Close project", ToolbarAction::CloseProject, action);
+        ui.separator();
+        menu_item(
+            ui,
+            "Practice notation…",
+            ToolbarAction::OpenPractice,
+            action,
+        );
         ui.separator();
         menu_item(ui, "Quit", ToolbarAction::Quit, action);
     });

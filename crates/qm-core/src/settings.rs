@@ -12,7 +12,8 @@ use crate::{CoreError, Result};
 /// How many recently opened projects are remembered.
 pub const MAX_RECENT_PROJECTS: usize = 10;
 
-const SETTINGS_DIR_NAME: &str = "quickmath";
+/// Folder in the OS config directory that holds all app-wide files.
+pub(crate) const SETTINGS_DIR_NAME: &str = "quickmath";
 const SETTINGS_FILE_NAME: &str = "settings.json";
 
 /// App-wide settings stored in the user's config directory.

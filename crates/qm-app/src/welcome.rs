@@ -8,6 +8,7 @@ use qm_render::Theme;
 #[derive(Debug, Clone, PartialEq)]
 pub enum WelcomeAction {
     OpenProjectDialog,
+    OpenPractice,
     OpenProject(PathBuf),
     /// Create `parent/name` and open it as a project.
     CreateProject {
@@ -94,6 +95,10 @@ impl WelcomeScreen {
         let new_project = egui::Button::new("➕  New project…").min_size(egui::vec2(220.0, 36.0));
         if ui.add(new_project).clicked() {
             self.new_project = Some(NewProjectForm::default());
+        }
+        let practice = egui::Button::new("🎯  Practice notation").min_size(egui::vec2(220.0, 36.0));
+        if ui.add(practice).clicked() {
+            *action = Some(WelcomeAction::OpenPractice);
         }
     }
 }

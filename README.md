@@ -33,6 +33,11 @@ cheat sheet, is in [docs/FORMAT.md](docs/FORMAT.md). A complete example note is
     ready-to-open vault.
   - LaTeX: standalone `.tex` with amsmath/amsthm environments.
   - PDF: built in (typst as a library), no TeX installation needed.
+- **Practice game** (welcome screen or ☰ → Practice notation): a rendered
+  formula appears and you type it; any spelling that renders the same counts.
+  Twelve levels unlock one by one, from operators to lecture-speed formulas,
+  with stars for speed (WPM) and a 60-second sprint over everything unlocked.
+  Progress is kept in `practice.json` next to the settings.
 - Light and dark themes, autosave, syntax highlighting, notation help panel.
 
 ## Building
