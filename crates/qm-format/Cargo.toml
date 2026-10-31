@@ -1,0 +1,8 @@
+[package]
+name = "qm-format"
+description = "The QuickMath (.qm) note format: parser, syntax tree and LaTeX conversion"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]

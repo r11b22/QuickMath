@@ -1,0 +1,10 @@
+[package]
+name = "qm-render"
+description = "Live egui renderer for QuickMath documents and math"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+qm-format.workspace = true
+egui.workspace = true

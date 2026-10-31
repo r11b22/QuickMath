@@ -1,0 +1,9 @@
+[package]
+name = "qm-core"
+description = "QuickMath backend: projects, note storage and exporters"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+qm-format.workspace = true

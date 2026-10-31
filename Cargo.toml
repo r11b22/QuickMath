@@ -1,0 +1,16 @@
+[workspace]
+resolver = "2"
+members = ["crates/qm-format", "crates/qm-core", "crates/qm-render", "crates/qm-app"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[workspace.dependencies]
+qm-format = { path = "crates/qm-format" }
+qm-core = { path = "crates/qm-core" }
+qm-render = { path = "crates/qm-render" }
+egui = "0.35"
+eframe = "0.35"
+typst-assets = { version = "0.15", features = ["fonts"] }

@@ -1,0 +1,17 @@
+[package]
+name = "qm-app"
+description = "QuickMath desktop editor"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "quick-math"
+path = "src/main.rs"
+
+[dependencies]
+qm-format.workspace = true
+qm-core.workspace = true
+qm-render.workspace = true
+egui.workspace = true
+eframe.workspace = true
