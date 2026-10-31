@@ -8,3 +8,7 @@ license.workspace = true
 [dependencies]
 qm-format.workspace = true
 egui.workspace = true
+typst-assets.workspace = true
+
+[dev-dependencies]
+eframe.workspace = true

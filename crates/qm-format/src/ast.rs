@@ -33,14 +33,27 @@ pub struct Block {
 #[derive(Debug, Clone, PartialEq)]
 pub enum BlockKind {
     /// `level` is 1..=6.
-    Heading { level: u8, content: Vec<Inline> },
+    Heading {
+        level: u8,
+        content: Vec<Inline>,
+    },
     Paragraph(Vec<Inline>),
     DisplayMath(DisplayMath),
     /// Each item is a list of blocks so items can nest lists and math.
-    List { ordered: bool, items: Vec<Vec<Block>> },
+    List {
+        ordered: bool,
+        items: Vec<Vec<Block>>,
+    },
     /// Lecture-style boxes such as definitions, theorems and proofs.
-    Callout { kind: CalloutKind, title: Vec<Inline>, body: Vec<Block> },
-    Code { language: Option<String>, code: String },
+    Callout {
+        kind: CalloutKind,
+        title: Vec<Inline>,
+        body: Vec<Block>,
+    },
+    Code {
+        language: Option<String>,
+        code: String,
+    },
     Quote(Vec<Block>),
     Rule,
 }
@@ -65,7 +78,10 @@ pub enum Inline {
     Code(String),
     Math(MathList),
     /// `[[target]]` or `[[target|label]]`, linking to another note in the project.
-    WikiLink { target: String, label: Option<String> },
+    WikiLink {
+        target: String,
+        label: Option<String>,
+    },
     LineBreak,
 }
 
@@ -88,24 +104,48 @@ pub enum MathNode {
     Atom(Atom),
     /// Upright prose inside math, e.g. `"otherwise"`.
     Text(String),
-    Fraction { numerator: MathList, denominator: MathList },
+    Fraction {
+        numerator: MathList,
+        denominator: MathList,
+    },
     /// A base with an optional subscript and/or superscript. When the base is a
     /// large operator with `limits: true`, display mode places the scripts
     /// above and below instead of to the right.
-    Scripts { base: Box<MathNode>, sub: Option<MathList>, sup: Option<MathList> },
-    Root { index: Option<MathList>, radicand: MathList },
+    Scripts {
+        base: Box<MathNode>,
+        sub: Option<MathList>,
+        sup: Option<MathList>,
+    },
+    Root {
+        index: Option<MathList>,
+        radicand: MathList,
+    },
     /// Delimiters that stretch to the body height. An empty string means "no
     /// delimiter on this side".
-    Fenced { open: String, close: String, body: MathList },
+    Fenced {
+        open: String,
+        close: String,
+        body: MathList,
+    },
     /// Rows of cells; `open`/`close` follow the same rules as `Fenced`.
     /// Piecewise definitions use `open: "{"` and `close: ""`.
-    Matrix { open: String, close: String, rows: Vec<Vec<MathList>> },
-    Accent { accent: AccentKind, body: MathList },
+    Matrix {
+        open: String,
+        close: String,
+        rows: Vec<Vec<MathList>>,
+    },
+    Accent {
+        accent: AccentKind,
+        body: MathList,
+    },
     /// Invisible grouping, e.g. the parentheses dropped from `(a+b)/c`.
     Group(MathList),
     Space(SpaceWidth),
     /// Source that could not be parsed; shown verbatim and highlighted.
-    Error { source: String, message: String },
+    Error {
+        source: String,
+        message: String,
+    },
 }
 
 /// A single symbol: a variable, number, operator, relation, Greek letter, …
@@ -124,7 +164,9 @@ pub struct Atom {
 pub enum AtomClass {
     Ordinary,
     /// `sum`, `int`, `lim`, … `limits` says whether scripts go above/below in display mode.
-    LargeOperator { limits: bool },
+    LargeOperator {
+        limits: bool,
+    },
     Binary,
     Relation,
     Open,

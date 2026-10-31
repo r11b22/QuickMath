@@ -15,3 +15,5 @@ qm-core.workspace = true
 qm-render.workspace = true
 egui.workspace = true
 eframe.workspace = true
+# Native open/save/folder dialogs (xdg-desktop-portal on Linux, no GTK needed).
+rfd = "0.17"
