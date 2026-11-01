@@ -435,7 +435,7 @@ Done in stages, each in its own module:
   thread, polled each frame.
 - One module per pane or widget: `toolbar.rs`, `file_tree.rs`, `outline.rs`,
   `editor.rs`, `completion_popup.rs`, `misspellings.rs`, `preview_pane.rs`, `status_bar.rs`,
-  `help_panel.rs`, `export_dialog.rs`, `prompts.rs` (small modals),
+  `help_panel.rs`, `export_dialog.rs`, `settings_window.rs`, `prompts.rs` (small modals),
   `toasts.rs` (notifications).
 - Pure helpers with no egui state: `text_metrics.rs` (cursor positions, word
   count, text edits), `autosave.rs` (debounce timer), `highlight.rs` (span to
@@ -471,8 +471,12 @@ Done in stages, each in its own module:
 - Misspelled words get a wavy underline in the error colour. Right-clicking
   one opens a menu with corrections and "Add to dictionary". Suggestions are
   only computed then, because they take tens of milliseconds per language.
-- Spelling languages are switched on and off in the ☰ menu under "Spell
-  check".
+- The settings window (☰ → Settings…) holds every setting: dark theme,
+  view mode, sidebar and cheat sheet visibility, and spelling languages.
+  Changes apply at once.
+- The toolbar keeps quick toggles for the theme, view mode, sidebar and
+  cheat sheet. They give the same actions as the settings window, so both
+  stay in step.
 - Math suggestions float under the word being typed. Only Tab accepts one;
   Up/Down choose and Escape hides them. Enter and Space keep their normal
   meaning, so typing on never picks a suggestion by accident.

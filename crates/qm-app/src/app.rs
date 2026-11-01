@@ -7,10 +7,11 @@ use qm_render::Theme;
 
 use crate::editor::EditorAction;
 use crate::practice::{PracticeAction, PracticeScreen};
+use crate::settings_window::SpellingSettings;
 use crate::spelling::Spelling;
 use crate::theme_style;
 use crate::toasts::Toasts;
-use crate::toolbar::{SpellingMenu, ToolbarAction};
+use crate::toolbar::ToolbarAction;
 use crate::welcome::{self, WelcomeAction, WelcomeScreen};
 use crate::workspace::{FrameContext, Workspace, WorkspaceAction};
 
@@ -150,7 +151,8 @@ impl QuickMathApp {
             ToolbarAction::Save
             | ToolbarAction::ToggleSidebar
             | ToolbarAction::ToggleHelp
-            | ToolbarAction::OpenExport => {}
+            | ToolbarAction::OpenExport
+            | ToolbarAction::OpenSettings => {}
         }
     }
 
@@ -232,7 +234,7 @@ impl QuickMathApp {
                     theme: &self.theme,
                     recent_projects: &recent_projects,
                     spell_check: self.spelling.current(),
-                    spelling_menu: SpellingMenu {
+                    spelling: SpellingSettings {
                         available: self.spelling.available(),
                         enabled: &self.settings.spelling_languages,
                     },

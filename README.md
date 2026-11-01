@@ -38,7 +38,7 @@ cheat sheet, is in [docs/FORMAT.md](docs/FORMAT.md). A complete example note is
   Twelve levels unlock one by one, from operators to lecture-speed formulas,
   with stars for speed (WPM) and a 60-second sprint over everything unlocked.
   Progress is kept in `practice.json` next to the settings.
-- **Spell checking** in several languages at once (☰ → Spell check). English
+- **Spell checking** in several languages at once (☰ → Settings…). English
   and Dutch are built in; any Hunspell `.aff`/`.dic` pair in
   `quickmath/dictionaries/` in the config directory (or installed system-wide
   on Linux) adds another. Only prose is checked, never math or code.

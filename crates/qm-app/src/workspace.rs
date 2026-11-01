@@ -15,10 +15,11 @@ use crate::note::OpenNote;
 use crate::outline;
 use crate::preview_pane::{self, PreviewSync};
 use crate::prompts::{self, Prompt, PromptOutcome};
+use crate::settings_window::{SettingsModel, SettingsWindow, SpellingSettings};
 use crate::spelling::SpellCheck;
 use crate::status_bar;
 use crate::toasts::Toasts;
-use crate::toolbar::{self, SpellingMenu, ToolbarAction, ToolbarModel, ViewMode};
+use crate::toolbar::{self, ToolbarAction, ToolbarModel, ViewMode};
 
 const SAVE_SHORTCUT: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key::S);
 const SIDEBAR_DEFAULT_WIDTH: f32 = 250.0;
@@ -40,7 +41,7 @@ pub struct FrameContext<'a> {
     pub recent_projects: &'a [PathBuf],
     /// `None` while spell checking is off or its dictionaries are loading.
     pub spell_check: Option<SpellCheck<'a>>,
-    pub spelling_menu: SpellingMenu<'a>,
+    pub spelling: SpellingSettings<'a>,
 }
 
 /// What the workspace passes up because only the app can handle it.
@@ -61,6 +62,7 @@ pub struct Workspace {
     layout: PaneLayout,
     prompt: Option<Prompt>,
     export: ExportDialog,
+    settings: SettingsWindow,
     help: HelpPanel,
 }
 
@@ -85,6 +87,7 @@ impl Workspace {
             },
             prompt: None,
             export: ExportDialog::default(),
+            settings: SettingsWindow::default(),
             help: HelpPanel::default(),
         };
         workspace.refresh_tree(toasts);
@@ -127,8 +130,12 @@ impl Workspace {
         self.show_help_panel(ui, frame.theme);
         let editor_action = self.show_centre(ui, frame, toasts);
         self.show_dialogs(ui.ctx(), frame.theme, toasts);
+        let settings_action = self
+            .show_settings(ui.ctx(), frame)
+            .and_then(|action| self.handle_toolbar_action(action, toasts));
         self.autosave(ui.ctx(), toasts);
         toolbar_action
+            .or(settings_action)
             .map(WorkspaceAction::Toolbar)
             .or(editor_action.map(WorkspaceAction::Editor))
     }
@@ -147,11 +154,24 @@ impl Workspace {
                     recent_projects: frame.recent_projects,
                     view_mode: &mut self.layout.view_mode,
                     is_help_open: self.layout.is_help_open,
-                    spelling: frame.spelling_menu,
                 };
                 toolbar::show_toolbar(ui, model, theme)
             })
             .inner
+    }
+
+    fn show_settings(
+        &mut self,
+        ctx: &egui::Context,
+        frame: &FrameContext,
+    ) -> Option<ToolbarAction> {
+        let model = SettingsModel {
+            view_mode: &mut self.layout.view_mode,
+            is_sidebar_open: self.layout.is_sidebar_open,
+            is_help_open: self.layout.is_help_open,
+            spelling: frame.spelling,
+        };
+        self.settings.show(ctx, model, frame.theme)
     }
 
     /// Handles actions that stay inside the workspace; passes the rest on.
@@ -169,6 +189,7 @@ impl Workspace {
             }
             ToolbarAction::ToggleHelp => self.layout.is_help_open = !self.layout.is_help_open,
             ToolbarAction::OpenExport => self.export.open(),
+            ToolbarAction::OpenSettings => self.settings.open(),
             other => return Some(other),
         }
         None

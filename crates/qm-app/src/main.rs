@@ -14,6 +14,7 @@ mod outline;
 mod practice;
 mod preview_pane;
 mod prompts;
+mod settings_window;
 mod spelling;
 mod status_bar;
 mod text_metrics;
