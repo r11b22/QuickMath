@@ -1,7 +1,7 @@
 # QuickMath
 
 ## Disclaimer
-This application was made entirely by an LLM. I did not code this and i do not take credit for the code written. I do take responsibility for its work though.
+This application was made entirely by an LLM. I did not code this and I do not take credit for the code written. I do take responsibility for its work though.
 
 ## Description
 
