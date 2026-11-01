@@ -130,6 +130,27 @@ answers = [
 ]
 
 [[level]]
+id = "shorthands"
+title = "Shorthands"
+lesson = "sq, cb and inv after a term replace ^2, ^3 and ^-1 without Shift, and digits right after a letter are an index: x1 is x_1. After a function name they go on the name: sin sq x."
+tips = ["x sq", "x cb", "A inv", "x1", "(a+b) sq", "sin sq x"]
+answers = [
+    "x sq",
+    "y cb",
+    "A inv",
+    "x1 + x2",
+    "x sq + y sq = r sq",
+    "a cb - b cb",
+    "x1 sq + x2 sq",
+    "(a+b) sq",
+    "sigma sq",
+    "lambda1 + lambda2",
+    "f inv(x)",
+    "sin sq x + cos sq x = 1",
+    "(A B) inv = B inv A inv",
+]
+
+[[level]]
 id = "sets"
 title = "Sets and logic"
 lesson = "Sets and logic are words too: in, sub, cup, cap, forall, exists. Double capitals give number sets: RR, NN, ZZ."

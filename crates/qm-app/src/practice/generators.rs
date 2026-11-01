@@ -133,6 +133,32 @@ pub fn functions(random: &mut Random) -> String {
     }
 }
 
+pub fn shorthands(random: &mut Random) -> String {
+    let [a, b, c] = random.pick_distinct(VARIABLES);
+    match random.below(7) {
+        0 => format!("{a} sq + {b} sq = {c} sq"),
+        1 => format!("{a} cb {} {b} cb", random.pick(BINARY)),
+        2 => {
+            let index = random.number(1..=3);
+            format!("{a}{index} sq + {a}{} sq", index + 1)
+        }
+        3 => format!(
+            "({a}{}{b}) {}",
+            random.pick(&["+", "-"]),
+            random.pick(&["sq", "cb"])
+        ),
+        4 => {
+            let [first, second] = random.pick_distinct(CAPITALS);
+            format!("({first} {second}) inv = {second} inv {first} inv")
+        }
+        5 => format!("{} inv({a})", random.pick(FUNCTION_NAMES)),
+        _ => {
+            let [first, second] = random.pick_distinct(TRIGONOMETRY);
+            format!("{first} sq {a} + {second} sq {a}")
+        }
+    }
+}
+
 pub fn sets(random: &mut Random) -> String {
     let [a, b] = random.pick_distinct(CAPITALS);
     let variable = random.pick(VARIABLES);
