@@ -11,7 +11,7 @@ license.workspace = true
 # workspace lockfile through typst; `preserve_order` keeps file order, which
 # decides the LaTeX of typed Unicode symbols.
 [build-dependencies]
-toml = { version = "0.8", default-features = false, features = ["parse", "preserve_order"] }
+toml = { workspace = true, features = ["preserve_order"] }
 
 [dev-dependencies]
-toml = { version = "0.8", default-features = false, features = ["parse", "preserve_order"] }
+toml = { workspace = true, features = ["preserve_order"] }

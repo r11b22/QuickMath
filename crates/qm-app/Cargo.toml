@@ -17,3 +17,10 @@ egui.workspace = true
 eframe.workspace = true
 # Native open/save/folder dialogs (xdg-desktop-portal on Linux, no GTK needed).
 rfd = "0.17"
+
+# Reads src/practice/lessons.toml at build time (see build.rs).
+[build-dependencies]
+toml.workspace = true
+
+[dev-dependencies]
+toml.workspace = true

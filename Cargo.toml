@@ -14,3 +14,5 @@ qm-render = { path = "crates/qm-render" }
 egui = "0.35"
 eframe = "0.35"
 typst-assets = { version = "0.15", features = ["fonts"] }
+# Build scripts and their tests only; the programs contain no TOML parser.
+toml = { version = "0.8", default-features = false, features = ["parse"] }

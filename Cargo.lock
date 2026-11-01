@@ -3467,6 +3467,7 @@ dependencies = [
  "qm-format",
  "qm-render",
  "rfd",
+ "toml",
 ]
 
 [[package]]

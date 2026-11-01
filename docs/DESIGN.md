@@ -65,6 +65,7 @@ The project is a Cargo workspace with four crates under `crates/`.
   standard PDF fonts built in).
 - qm-render depends on qm-format and egui, plus typst-assets for fonts.
 - qm-app depends on all three, plus eframe and rfd (native file dialogs).
+  Like qm-format, it uses `toml` only in its build script and tests.
 - qm-core and qm-render do not depend on each other.
 - Only qm-app may know about windows, screens and user interaction.
 - Only qm-core may touch the file system. qm-app goes through qm-core for
@@ -165,6 +166,13 @@ The code follows model–view–controller, adapted to egui's immediate mode.
    that fills formula shapes with random letters and numbers using only that
    level's notation, and the sprint draws from the generators of the
    unlocked levels.
+5. The levels (id, title, lesson, tips, answers) are defined in
+   `src/practice/lessons.toml`. `build.rs` reads it at compile time, using
+   `build/lesson_tables.rs`, and generates the `LEVELS` table that
+   `curriculum.rs` includes, so the program contains no TOML parser.
+   Mistakes in the file fail the build with a message naming the level, and
+   `tests/lesson_file.rs` tests the generator directly. A level's generator
+   is the function in `generators.rs` named after its id.
 
 ### 3.6 Slides
 
@@ -469,8 +477,9 @@ Done in stages, each in its own module:
 - Pure helpers with no egui state: `text_metrics.rs` (cursor positions, word
   count, text edits), `autosave.rs` (debounce timer), `highlight.rs` (span to
   layout job conversion), `theme_style.rs` (maps `Theme` onto egui visuals).
-- `practice/`: the practice game. `curriculum.rs` (levels and their
-  answers), `generators.rs` (random sprint formulas, one generator per
+- `practice/`: the practice game. `lessons.toml` (the levels),
+  `curriculum.rs` (the `Level` type and the table generated from
+  `lessons.toml`), `generators.rs` (random sprint formulas, one generator per
   level), `random.rs` (the seeded random source), `session.rs` (one run:
   queue, clock, grading), `play.rs` and `menu.rs` (the screens).
 
@@ -530,7 +539,7 @@ Done in stages, each in its own module:
   dependency) and never repeat the same formula twice in a row.
 - Generated formulas write separate variables with a space between them, so
   letters never merge into a keyword (`p i` is not `pi`).
-- Level ids in `curriculum.rs` are keys in saved progress and must never
+- Level ids in `lessons.toml` are keys in saved progress and must never
   change once released.
 - Stars come from typing speed: two stars from 20 WPM, three from 35 WPM (one
   word = five characters).
