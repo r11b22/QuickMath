@@ -2,6 +2,7 @@
 
 mod app;
 mod autosave;
+mod completion_popup;
 mod editor;
 mod export_dialog;
 mod file_tree;

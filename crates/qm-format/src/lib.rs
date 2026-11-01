@@ -6,6 +6,7 @@ pub mod ast;
 
 mod block;
 mod cheat_sheet;
+mod completion;
 mod front_matter;
 mod highlight;
 mod inline;
@@ -92,6 +93,35 @@ pub struct VocabularyEntry {
 /// so the help panel always lists exactly what the parser understands.
 pub fn vocabulary() -> &'static [VocabularySection] {
     math::vocabulary()
+}
+
+/// Suggestions for the math word ending at the cursor, see [`math_completions`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MathCompletions {
+    /// Byte range of the partly typed word, to replace with the chosen spelling.
+    pub range: std::ops::Range<usize>,
+    /// Best first; never empty.
+    pub candidates: Vec<MathCompletion>,
+}
+
+/// One suggested word from the syntax file.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MathCompletion {
+    pub entry: VocabularyEntry,
+    /// Title of the syntax-file section, e.g. `"Greek letters"`.
+    pub section: &'static str,
+}
+
+/// Suggests syntax-file words for the partly typed math word that ends at
+/// byte offset `cursor` of the note `source`.
+///
+/// Returns `None` outside math (prose, code, quoted text in math), when the
+/// cursor is inside a word, for fewer than two letters, and when the only
+/// match is the word as already typed. Words in `\word` form are completed
+/// too. Never panics, also not for a `cursor` past the end or inside a
+/// character.
+pub fn math_completions(source: &str, cursor: usize) -> Option<MathCompletions> {
+    completion::math_completions(source, cursor)
 }
 
 /// Syntax-highlighting category for a byte range of the source.

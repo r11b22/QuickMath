@@ -76,7 +76,9 @@ pub fn outdent_line(text: &mut String, cursor: usize, width: usize) -> usize {
     cursor.saturating_sub(removable).max(line_start)
 }
 
-fn byte_offset_of_char(text: &str, char_index: usize) -> usize {
+/// Returns the byte offset of the character offset `char_index`, clamped to
+/// the end of the text.
+pub fn byte_offset_of_char(text: &str, char_index: usize) -> usize {
     text.char_indices()
         .nth(char_index)
         .map_or(text.len(), |(byte, _)| byte)

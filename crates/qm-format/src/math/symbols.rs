@@ -187,6 +187,15 @@ pub(crate) fn is_keyword(word: &str) -> bool {
     keyword_table().contains_key(word)
 }
 
+/// The Unicode text of a keyword that stands for one symbol (`eps` → `ε`),
+/// so aliases of the same symbol can be recognised.
+pub(crate) fn keyword_symbol_text(word: &str) -> Option<&'static str> {
+    match keyword(word)? {
+        Keyword::Symbol(symbol) => Some(symbol.text),
+        _ => None,
+    }
+}
+
 /// The atom for an operator token produced by the lexer.
 pub(crate) fn operator_atom(spelling: &str) -> Atom {
     match OPERATORS

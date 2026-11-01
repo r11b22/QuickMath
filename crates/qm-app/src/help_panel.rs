@@ -5,9 +5,13 @@ use egui::{RichText, Sense};
 use qm_format::{CheatSheetKind, MathList};
 use qm_render::Theme;
 
-const SHORTCUTS: [(&str, &str); 5] = [
+const SHORTCUTS: [(&str, &str); 6] = [
     ("Ctrl+S", "Save now (notes also autosave after 1 s)"),
     ("Tab / Shift+Tab", "Indent / outdent by two spaces"),
+    (
+        "Tab in math",
+        "Complete the suggested word (Up/Down choose, Esc hides)",
+    ),
     ("Double-click preview", "Jump the editor to that block"),
     (
         "Click [[link]] in preview",

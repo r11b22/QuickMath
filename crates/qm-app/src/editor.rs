@@ -1,10 +1,12 @@
-//! The source editor: a highlighted, monospace `TextEdit` with a line-number gutter.
+//! The source editor: a highlighted, monospace `TextEdit` with a line-number
+//! gutter and suggestions for math words.
 
 use egui::text::{CCursor, CCursorRange};
 use egui::widgets::text_edit::{TextEditOutput, TextEditState};
-use egui::{Align, Align2, FontId, Id, Key, Modifiers};
+use egui::{Align, Align2, EventFilter, FontId, Id, Key, Modifiers};
 use qm_render::Theme;
 
+use crate::completion_popup::CompletionPopup;
 use crate::highlight::HighlightCache;
 use crate::note::OpenNote;
 use crate::text_metrics;
@@ -21,6 +23,7 @@ const MIN_GUTTER_DIGITS: usize = 2;
 #[derive(Default)]
 pub struct EditorView {
     highlight: HighlightCache,
+    completion: CompletionPopup,
 }
 
 /// The editor's widget id. Salted with the note path so every note gets its
@@ -35,7 +38,9 @@ impl EditorView {
         let id = editor_id(note);
         let now = ui.input(|input| input.time);
         let font_id = FontId::monospace(EDITOR_FONT_SIZE);
-        let mut is_edited = handle_indent_keys(ui.ctx(), id, &mut note.text);
+        let mut is_edited = self.accept_completion(ui.ctx(), id, &mut note.text);
+        // Runs after completion, which takes Tab while suggestions are shown.
+        is_edited |= handle_indent_keys(ui.ctx(), id, &mut note.text);
         if let Some(insertion) = note.requests.insertion.take() {
             insert_at_cursor(ui.ctx(), id, &mut note.text, &insertion);
             ui.memory_mut(|memory| memory.request_focus(id));
@@ -47,7 +52,7 @@ impl EditorView {
             current_line: note.cursor.line,
         };
 
-        let output = egui::ScrollArea::vertical()
+        let scroll = egui::ScrollArea::vertical()
             .id_salt(id.with("scroll"))
             .auto_shrink([false, false])
             .show(ui, |ui| {
@@ -58,8 +63,8 @@ impl EditorView {
                     move_cursor_to_line(ui, id, &note.text, &output, line);
                 }
                 output
-            })
-            .inner;
+            });
+        let output = scroll.inner;
 
         if is_edited || output.response.response.changed() {
             note.mark_edited(now);
@@ -67,6 +72,33 @@ impl EditorView {
         if let Some(range) = output.cursor_range {
             note.cursor = text_metrics::position_of_char(&note.text, range.primary.index.0);
         }
+        if ui.memory(|memory| memory.has_focus(id)) {
+            let cursor = output.cursor_range.and_then(cursor_without_selection);
+            self.completion.update(&note.text, cursor);
+            let filter = editor_event_filter(self.completion.is_visible());
+            ui.memory_mut(|memory| memory.set_focus_lock_filter(id, filter));
+            let popup_id = id.with("completion");
+            self.completion
+                .show(ui.ctx(), popup_id, &output, scroll.inner_rect, theme);
+        }
+    }
+
+    /// Applies a suggestion accepted with Tab. Returns whether the text changed.
+    fn accept_completion(&mut self, ctx: &egui::Context, id: Id, text: &mut String) -> bool {
+        if !ctx.memory(|memory| memory.has_focus(id)) {
+            return false;
+        }
+        // Refresh first: the text may have changed since the last frame
+        // (another note opened, an insertion from the help panel).
+        let cursor = TextEditState::load(ctx, id)
+            .and_then(|state| state.cursor.char_range())
+            .and_then(cursor_without_selection);
+        self.completion.update(text, cursor);
+        let Some(acceptance) = self.completion.handle_keys(ctx) else {
+            return false;
+        };
+        replace_and_place_cursor(ctx, id, text, acceptance.char_range, acceptance.spelling);
+        true
     }
 
     fn show_text_edit(
@@ -122,8 +154,8 @@ fn handle_indent_keys(ctx: &egui::Context, id: Id, text: &mut String) -> bool {
 /// Replaces the selection (or inserts at the cursor, or at the end when the
 /// editor never had a cursor) and places the cursor after the insertion.
 fn insert_at_cursor(ctx: &egui::Context, id: Id, text: &mut String, insertion: &str) -> bool {
-    let mut state = TextEditState::load(ctx, id).unwrap_or_default();
-    let range = match state.cursor.char_range() {
+    let selection = TextEditState::load(ctx, id).and_then(|state| state.cursor.char_range());
+    let range = match selection {
         Some(range) => {
             let sorted = range.as_sorted_char_range();
             sorted.start.0..sorted.end.0
@@ -133,12 +165,42 @@ fn insert_at_cursor(ctx: &egui::Context, id: Id, text: &mut String, insertion: &
             end..end
         }
     };
-    let cursor = text_metrics::replace_char_range(text, range, insertion);
+    replace_and_place_cursor(ctx, id, text, range, insertion);
+    true
+}
+
+/// Replaces `char_range` with `insertion` and puts the cursor after it.
+fn replace_and_place_cursor(
+    ctx: &egui::Context,
+    id: Id,
+    text: &mut String,
+    char_range: std::ops::Range<usize>,
+    insertion: &str,
+) {
+    let mut state = TextEditState::load(ctx, id).unwrap_or_default();
+    let cursor = text_metrics::replace_char_range(text, char_range, insertion);
     state
         .cursor
         .set_char_range(Some(CCursorRange::one(CCursor::new(cursor))));
     state.store(ctx, id);
-    true
+}
+
+/// The keys the focused editor keeps for itself instead of egui's focus
+/// navigation. Matches what `TextEdit` with `lock_focus(true)` sets, plus
+/// Escape while suggestions are shown, so Escape hides them rather than
+/// leaving the editor. Applies from the next frame on.
+fn editor_event_filter(is_completion_visible: bool) -> EventFilter {
+    EventFilter {
+        tab: true,
+        horizontal_arrows: true,
+        vertical_arrows: true,
+        escape: is_completion_visible,
+    }
+}
+
+/// The cursor's character offset, or `None` while text is selected.
+fn cursor_without_selection(range: CCursorRange) -> Option<usize> {
+    (range.primary == range.secondary).then_some(range.primary.index.0)
 }
 
 fn outdent_at_cursor(ctx: &egui::Context, id: Id, text: &mut String) -> bool {
@@ -230,5 +292,125 @@ impl Gutter {
             }
             starts_line = row.ends_with_newline;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use egui::{Event, RawInput};
+    use qm_core::Project;
+
+    /// Drives the real editor widget headlessly, one frame per call.
+    struct Harness {
+        ctx: egui::Context,
+        editor: EditorView,
+        note: OpenNote,
+        folder: std::path::PathBuf,
+    }
+
+    impl Harness {
+        fn new(name: &str) -> Harness {
+            let folder =
+                std::env::temp_dir().join(format!("qm-editor-test-{}-{name}", std::process::id()));
+            std::fs::create_dir_all(&folder).unwrap();
+            let project = Project::open(&folder).unwrap();
+            let path = project.create_note(&folder, "note").unwrap();
+            let note = OpenNote::load(&project, &path).unwrap();
+            let ctx = egui::Context::default();
+            let mut fonts = egui::FontDefinitions::default();
+            qm_render::install_fonts(&mut fonts);
+            ctx.set_fonts(fonts);
+            ctx.memory_mut(|memory| memory.request_focus(editor_id(&note)));
+            let mut harness = Harness {
+                ctx,
+                editor: EditorView::default(),
+                note,
+                folder,
+            };
+            harness.frame(Vec::new());
+            harness
+        }
+
+        fn frame(&mut self, events: Vec<Event>) {
+            let input = RawInput {
+                events,
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(800.0, 600.0),
+                )),
+                ..RawInput::default()
+            };
+            let theme = Theme::light();
+            let Harness {
+                ctx, editor, note, ..
+            } = self;
+            let _ = ctx.run_ui(input, |ui| editor.show(ui, note, &theme));
+        }
+
+        fn type_text(&mut self, text: &str) {
+            self.frame(vec![Event::Text(text.to_string())]);
+        }
+
+        fn press(&mut self, key: Key) {
+            self.frame(vec![Event::Key {
+                key,
+                physical_key: None,
+                pressed: true,
+                repeat: false,
+                modifiers: Modifiers::NONE,
+            }]);
+        }
+    }
+
+    impl Drop for Harness {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.folder);
+        }
+    }
+
+    #[test]
+    fn tab_completes_a_math_word() {
+        let mut harness = Harness::new("complete");
+        harness.type_text(";;alp");
+        harness.press(Key::Tab);
+        assert_eq!(harness.note.text, ";;alpha");
+        harness.type_text(" x");
+        assert_eq!(harness.note.text, ";;alpha x");
+    }
+
+    #[test]
+    fn arrow_down_picks_the_next_suggestion() {
+        let mut harness = Harness::new("arrow");
+        harness.type_text(";;sq");
+        harness.press(Key::ArrowDown);
+        harness.press(Key::Tab);
+        assert_eq!(harness.note.text, ";;sqrt");
+    }
+
+    #[test]
+    fn tab_indents_when_nothing_is_suggested() {
+        let mut harness = Harness::new("indent");
+        harness.type_text("alp");
+        harness.press(Key::Tab);
+        assert_eq!(harness.note.text, "alp  ");
+    }
+
+    #[test]
+    fn escape_hides_suggestions_so_tab_indents() {
+        let mut harness = Harness::new("escape");
+        harness.type_text(";;alp");
+        harness.press(Key::Escape);
+        harness.press(Key::Tab);
+        assert_eq!(harness.note.text, ";;alp  ");
+    }
+
+    #[test]
+    fn escape_without_suggestions_still_leaves_the_editor() {
+        let mut harness = Harness::new("leave");
+        harness.type_text("alp");
+        harness.press(Key::Escape);
+        harness.press(Key::Tab);
+        assert_eq!(harness.note.text, "alp");
     }
 }
