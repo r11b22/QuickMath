@@ -72,7 +72,7 @@ fn sprint_card(ui: &mut egui::Ui, progress: &PracticeProgress, theme: &Theme) ->
         _ => "Not played yet".to_string(),
     };
     let description =
-        format!("{SPRINT_SECONDS:.0} seconds of random formulas from every unlocked level.");
+        format!("{SPRINT_SECONDS:.0} seconds of new random formulas using every unlocked level.");
     card(ui, theme, true, |ui| {
         ui.horizontal(|ui| {
             ui.label(

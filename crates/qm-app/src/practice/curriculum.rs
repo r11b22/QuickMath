@@ -2,6 +2,8 @@
 //! Each exercise is a reference answer; the formula the player sees is that
 //! answer rendered, and any input that renders the same counts as correct.
 
+use super::generators::{self, ExerciseGenerator};
+
 /// One level of the practice game.
 pub struct Level {
     /// Stable key for saved progress. Never change it once released.
@@ -13,6 +15,8 @@ pub struct Level {
     pub tips: &'static [&'static str],
     /// Reference answers, easiest first.
     pub answers: &'static [&'static str],
+    /// Makes random formulas with this level's notation for the sprint.
+    pub generate: ExerciseGenerator,
 }
 
 pub const LEVELS: &[Level] = &[
@@ -34,6 +38,7 @@ pub const LEVELS: &[Level] = &[
             "a >= b > c",
             "x ~= 3.14",
         ],
+        generate: generators::basics,
     },
     Level {
         id: "scripts",
@@ -55,6 +60,7 @@ pub const LEVELS: &[Level] = &[
             "A inv",
             "a^m+n = a^m a^n",
         ],
+        generate: generators::scripts,
     },
     Level {
         id: "fractions",
@@ -74,6 +80,7 @@ pub const LEVELS: &[Level] = &[
             "y = 1 + x over 1 - x",
             "a/b + c/d = a d + b c over b d",
         ],
+        generate: generators::fractions,
     },
     Level {
         id: "roots",
@@ -94,6 +101,7 @@ pub const LEVELS: &[Level] = &[
             "e^[-x^2/2]",
             "sqrt[a^2 + b^2]",
         ],
+        generate: generators::roots,
     },
     Level {
         id: "greek",
@@ -121,6 +129,7 @@ pub const LEVELS: &[Level] = &[
             "grad f = 0",
             "sigma sq = E[X sq] - mu sq",
         ],
+        generate: generators::greek,
     },
     Level {
         id: "functions",
@@ -140,6 +149,7 @@ pub const LEVELS: &[Level] = &[
             "exp(ln x) = x",
             "tan x = sin x over cos x",
         ],
+        generate: generators::functions,
     },
     Level {
         id: "sets",
@@ -167,6 +177,7 @@ pub const LEVELS: &[Level] = &[
             "{x in RR : x > 0}",
             "A sube B <=> A cap B = A",
         ],
+        generate: generators::sets,
     },
     Level {
         id: "accents",
@@ -185,6 +196,7 @@ pub const LEVELS: &[Level] = &[
             "z bar z = abs z sq",
             "vec F = m vec a",
         ],
+        generate: generators::accents,
     },
     Level {
         id: "operators",
@@ -203,6 +215,7 @@ pub const LEVELS: &[Level] = &[
             "int 0 to oo e^-x dx = 1",
             "sum k=1 to n k = n(n+1)/2",
         ],
+        generate: generators::operators,
     },
     Level {
         id: "limits",
@@ -219,6 +232,7 @@ pub const LEVELS: &[Level] = &[
             "sup x in A x <= M",
             "lim h to 0 [f(x+h) - f(x)]/h",
         ],
+        generate: generators::limits,
     },
     Level {
         id: "matrices",
@@ -241,6 +255,7 @@ pub const LEVELS: &[Level] = &[
             "f(x) = cases 1 if x in QQ, 0 otherwise",
             "A inv = 1/[a d - b c] bmat d -b, -c a",
         ],
+        generate: generators::matrices,
     },
     Level {
         id: "lecture",
@@ -260,6 +275,7 @@ pub const LEVELS: &[Level] = &[
             "P(A mid B) = P(A cap B) over P(B)",
             "forall eps > 0 exists delta > 0 : abs x-a < delta => abs f(x)-f(a) < eps",
         ],
+        generate: generators::lecture,
     },
 ];
 

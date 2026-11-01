@@ -6,6 +6,8 @@
 use qm_format::{MathList, MathNode};
 
 use super::curriculum::LEVELS;
+use super::generators::ExerciseGenerator;
+use super::random::Random;
 
 /// Length of a sprint.
 pub const SPRINT_SECONDS: f64 = 60.0;
@@ -34,7 +36,7 @@ pub struct SessionResult {
 
 /// A formula to type, with what it must render as.
 struct Exercise {
-    answer: &'static str,
+    answer: String,
     target: MathList,
     target_latex: String,
     /// `target` without LaTeX spellings, so `=>` and `implies` (both ⇒) match.
@@ -42,8 +44,8 @@ struct Exercise {
 }
 
 impl Exercise {
-    fn new(answer: &'static str) -> Exercise {
-        let target = qm_format::parse_math(answer);
+    fn new(answer: String) -> Exercise {
+        let target = qm_format::parse_math(&answer);
         Exercise {
             answer,
             target_latex: qm_format::math_to_latex(&target),
@@ -101,39 +103,30 @@ enum ExerciseQueue {
         answers: &'static [&'static str],
         next: usize,
     },
-    /// Random picks for a sprint, never the same formula twice in a row.
-    Shuffled {
-        pool: Vec<&'static str>,
-        random_state: u64,
+    /// Fresh formulas for a sprint from randomly chosen generators, never
+    /// the same formula twice in a row.
+    Generated {
+        generators: Vec<ExerciseGenerator>,
+        random: Random,
     },
 }
 
 impl ExerciseQueue {
-    fn next(&mut self, previous: Option<&str>) -> Option<&'static str> {
+    fn next(&mut self, previous: Option<&str>) -> Option<String> {
         match self {
             ExerciseQueue::Ordered { answers, next } => {
                 let answer = answers.get(*next)?;
                 *next += 1;
-                Some(answer)
+                Some(answer.to_string())
             }
-            ExerciseQueue::Shuffled { pool, random_state } => loop {
-                let index = (next_random(random_state) % pool.len() as u64) as usize;
-                if pool.len() == 1 || Some(pool[index]) != previous {
-                    return Some(pool[index]);
+            ExerciseQueue::Generated { generators, random } => loop {
+                let answer = random.pick(generators)(random);
+                if Some(answer.as_str()) != previous {
+                    return Some(answer);
                 }
             },
         }
     }
-}
-
-/// xorshift64: plenty for shuffling exercises, and needs no dependency.
-fn next_random(state: &mut u64) -> u64 {
-    let mut x = *state;
-    x ^= x << 13;
-    x ^= x >> 7;
-    x ^= x << 17;
-    *state = x;
-    x
 }
 
 pub struct Session {
@@ -160,13 +153,16 @@ impl Session {
         Session::new(SessionKind::Level(index), queue, Some(answers.len()))
     }
 
-    /// Random formulas from `pool` for [`SPRINT_SECONDS`]. `pool` must not be empty.
-    pub fn sprint(pool: Vec<&'static str>, seed: u64) -> Session {
-        assert!(!pool.is_empty(), "a sprint needs at least one formula");
-        let queue = ExerciseQueue::Shuffled {
-            pool,
-            // xorshift gets stuck at zero.
-            random_state: seed | 1,
+    /// Formulas made by `generators` for [`SPRINT_SECONDS`]. `generators`
+    /// must not be empty, and each must be able to make more than one formula.
+    pub fn sprint(generators: Vec<ExerciseGenerator>, seed: u64) -> Session {
+        assert!(
+            !generators.is_empty(),
+            "a sprint needs at least one generator"
+        );
+        let queue = ExerciseQueue::Generated {
+            generators,
+            random: Random::new(seed),
         };
         Session::new(SessionKind::Sprint, queue, None)
     }
@@ -199,8 +195,8 @@ impl Session {
     }
 
     /// The reference answer for the current formula.
-    pub fn answer(&self) -> &'static str {
-        self.current.answer
+    pub fn answer(&self) -> &str {
+        &self.current.answer
     }
 
     pub fn is_revealed(&self) -> bool {
@@ -306,7 +302,7 @@ impl Session {
     fn advance(&mut self, now: f64) {
         self.input.clear();
         self.is_revealed = false;
-        match self.queue.next(Some(self.current.answer)) {
+        match self.queue.next(Some(&self.current.answer)) {
             Some(answer) => self.current = Exercise::new(answer),
             None => self.finished_at = Some(now),
         }
@@ -324,6 +320,7 @@ fn stars_for(wpm: f64, reveals: usize) -> u8 {
 
 #[cfg(test)]
 mod tests {
+    use super::super::generators;
     use super::*;
 
     fn type_answer(session: &mut Session, input: &str, now: f64) -> bool {
@@ -335,10 +332,10 @@ mod tests {
         let mut session = Session::level(index);
         let mut now = 0.0;
         while !session.is_finished() {
-            let answer = session.answer();
+            let answer = session.answer().to_string();
             type_answer(&mut session, &answer[..1], now);
             now += seconds_per_formula;
-            assert!(type_answer(&mut session, answer, now), "{answer:?}");
+            assert!(type_answer(&mut session, &answer, now), "{answer:?}");
         }
         session
     }
@@ -364,7 +361,7 @@ mod tests {
         ];
         for (answer, alternative) in cases {
             assert!(
-                Exercise::new(answer).is_solved_by(alternative),
+                Exercise::new(answer.to_string()).is_solved_by(alternative),
                 "{alternative:?} should solve {answer:?}"
             );
         }
@@ -380,7 +377,7 @@ mod tests {
         ];
         for (answer, wrong) in cases {
             assert!(
-                !Exercise::new(answer).is_solved_by(wrong),
+                !Exercise::new(answer.to_string()).is_solved_by(wrong),
                 "{wrong:?} should not solve {answer:?}"
             );
         }
@@ -409,9 +406,9 @@ mod tests {
     #[test]
     fn solving_moves_on_and_clears_the_input() {
         let mut session = Session::level(0);
-        let first = session.answer();
+        let first = session.answer().to_string();
 
-        assert!(type_answer(&mut session, first, 1.0));
+        assert!(type_answer(&mut session, &first, 1.0));
 
         assert_eq!(session.solved(), 1);
         assert!(session.input.is_empty());
@@ -426,8 +423,8 @@ mod tests {
         let mut now = 0.0;
         while !session.is_finished() {
             now += 0.1;
-            let answer = session.answer();
-            type_answer(&mut session, answer, now);
+            let answer = session.answer().to_string();
+            type_answer(&mut session, &answer, now);
         }
 
         let result = session.result().unwrap();
@@ -456,7 +453,7 @@ mod tests {
 
     #[test]
     fn sprint_ends_after_its_time_and_freezes_the_clock() {
-        let mut session = Session::sprint(vec!["x", "y"], 42);
+        let mut session = Session::sprint(vec![generators::basics], 42);
         type_answer(&mut session, "z", 10.0);
 
         session.tick(10.0 + SPRINT_SECONDS - 0.1);
@@ -468,13 +465,31 @@ mod tests {
         assert_eq!(session.result().unwrap().stars, 0);
     }
 
+    /// Only two formulas, so repeats would be common without the guard.
+    fn x_or_y(random: &mut Random) -> String {
+        random.pick(&["x", "y"]).to_string()
+    }
+
     #[test]
     fn sprint_never_repeats_the_previous_formula() {
-        let mut session = Session::sprint(vec!["x", "y", "z"], 7);
+        let mut session = Session::sprint(vec![x_or_y], 7);
         for step in 0..50 {
-            let previous = session.answer();
-            type_answer(&mut session, previous, step as f64);
+            let previous = session.answer().to_string();
+            type_answer(&mut session, &previous, step as f64);
             assert_ne!(session.answer(), previous);
+        }
+    }
+
+    #[test]
+    fn sprint_formulas_solve_themselves() {
+        let all_levels = LEVELS.iter().map(|level| level.generate).collect();
+        let mut session = Session::sprint(all_levels, 11);
+        for step in 0..200 {
+            let answer = session.answer().to_string();
+            assert!(
+                type_answer(&mut session, &answer, step as f64),
+                "{answer:?}"
+            );
         }
     }
 

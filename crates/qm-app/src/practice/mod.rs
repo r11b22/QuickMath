@@ -1,10 +1,13 @@
 //! The notation practice game: a formula is shown rendered, the player types
 //! QuickMath for it, and the next one appears as soon as the input renders
-//! the same. Levels unlock one by one; the sprint mixes every unlocked level.
+//! the same. Levels unlock one by one; the sprint generates random formulas
+//! with the notation of every unlocked level.
 
 mod curriculum;
+mod generators;
 mod menu;
 mod play;
+mod random;
 mod session;
 
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -15,6 +18,7 @@ use qm_render::Theme;
 
 use crate::toasts::Toasts;
 use curriculum::LEVELS;
+use generators::ExerciseGenerator;
 use menu::MenuAction;
 use play::{ResultsAction, RoundAction};
 use session::{Session, SessionKind, SessionResult};
@@ -123,7 +127,9 @@ impl PracticeScreen {
     fn start(&mut self, kind: SessionKind) {
         let session = match kind {
             SessionKind::Level(index) => Session::level(index),
-            SessionKind::Sprint => Session::sprint(sprint_pool(&self.progress), random_seed()),
+            SessionKind::Sprint => {
+                Session::sprint(sprint_generators(&self.progress), random_seed())
+            }
         };
         self.view = View::Playing(Box::new(Round::new(session)));
     }
@@ -157,11 +163,11 @@ fn is_unlocked(progress: &PracticeProgress, index: usize) -> bool {
     index == 0 || progress.level(LEVELS[index - 1].id).stars > 0
 }
 
-/// Every formula from the unlocked levels.
-fn sprint_pool(progress: &PracticeProgress) -> Vec<&'static str> {
+/// The exercise generators of the unlocked levels.
+fn sprint_generators(progress: &PracticeProgress) -> Vec<ExerciseGenerator> {
     (0..LEVELS.len())
         .filter(|&index| is_unlocked(progress, index))
-        .flat_map(|index| LEVELS[index].answers.iter().copied())
+        .map(|index| LEVELS[index].generate)
         .collect()
 }
 
@@ -193,13 +199,12 @@ mod tests {
     }
 
     #[test]
-    fn sprint_draws_from_unlocked_levels_only() {
+    fn sprint_generates_from_unlocked_levels_only() {
         let mut progress = PracticeProgress::default();
-        assert_eq!(sprint_pool(&progress), LEVELS[0].answers);
+        assert_eq!(sprint_generators(&progress).len(), 1);
 
         progress.record_level(LEVELS[0].id, 2, 25.0);
 
-        let expected = LEVELS[0].answers.len() + LEVELS[1].answers.len();
-        assert_eq!(sprint_pool(&progress).len(), expected);
+        assert_eq!(sprint_generators(&progress).len(), 2);
     }
 }

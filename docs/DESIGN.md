@@ -161,6 +161,10 @@ The code follows model–view–controller, adapted to egui's immediate mode.
    it produces the same LaTeX, or the same drawn symbols, as the answer, so
    any spelling that looks the same is accepted.
 3. Results (stars, best WPM) are stored through `qm_core::PracticeProgress`.
+4. The sprint does not reuse the levels' answers. Each level has a generator
+   that fills formula shapes with random letters and numbers using only that
+   level's notation, and the sprint draws from the generators of the
+   unlocked levels.
 
 ### 3.6 Slides
 
@@ -465,8 +469,9 @@ Done in stages, each in its own module:
   count, text edits), `autosave.rs` (debounce timer), `highlight.rs` (span to
   layout job conversion), `theme_style.rs` (maps `Theme` onto egui visuals).
 - `practice/`: the practice game. `curriculum.rs` (levels and their
-  answers), `session.rs` (one run: queue, clock, grading), `play.rs` and
-  `menu.rs` (the screens).
+  answers), `generators.rs` (random sprint formulas, one generator per
+  level), `random.rs` (the seeded random source), `session.rs` (one run:
+  queue, clock, grading), `play.rs` and `menu.rs` (the screens).
 
 ### 7.2 Interaction pattern
 
@@ -520,8 +525,10 @@ Done in stages, each in its own module:
 
 - Session times use egui's clock passed in by the caller, so a session is
   deterministic and testable.
-- Sprints pick exercises with a seeded xorshift generator (no dependency) and
-  never repeat the same formula twice in a row.
+- Sprints generate exercises with a seeded xorshift random source (no
+  dependency) and never repeat the same formula twice in a row.
+- Generated formulas write separate variables with a space between them, so
+  letters never merge into a keyword (`p i` is not `pi`).
 - Level ids in `curriculum.rs` are keys in saved progress and must never
   change once released.
 - Stars come from typing speed: two stars from 20 WPM, three from 35 WPM (one

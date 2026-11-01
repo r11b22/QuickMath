@@ -9,7 +9,10 @@
   - [x] Remember the last viewed page per note
   - [x] Render pages on a background thread and cache them, so typing never stutters
   - [x] Show a toast when a slides file is missing or can't be read
-- [ ] Random practice example generation
+- [x] Random practice example generation
+  - [x] A generator per level that makes random formulas with only that level's notation
+  - [x] The 60-second sprint uses generated formulas from the unlocked levels
+        instead of the levels' fixed answers
 - [ ] Add string lookup for possible translations
 - [x] Settings menu
 - [x] Spell checking
