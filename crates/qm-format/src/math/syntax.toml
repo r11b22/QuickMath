@@ -16,8 +16,8 @@
 #   - An operator is ASCII punctuation such as `<=`; it may end in letters
 #     (`!in`), in which case it only matches when no letter follows. Operators
 #     may only appear in the letter, symbol, relation, binary and punctuation
-#     sections. An operator cannot start with ( ) [ ] { } _ ^ ' " ` or \, and
-#     a lone `/` is the fraction slash.
+#     sections. An operator cannot start with ( ) [ ] { } _ ^ ' " ` or \ or
+#     `**` (another spelling of `^`), and a lone `/` is the fraction slash.
 #   - Each spelling may be defined once in the whole file.
 #   - Use literal strings ('\alpha') for LaTeX so backslashes need no escaping.
 #
@@ -47,8 +47,8 @@
 #   [prose]      `word = "shown text"`, upright prose that ends a run
 #
 # Kept in code because they are grammar rather than vocabulary: `inf`
-# directly followed by `_` means the infimum, `^*` is the conjugate star, and
-# `'` is a prime.
+# directly followed by `_` means the infimum, `**` is another spelling of `^`,
+# `^*` is the conjugate star, and `'` is a prime.
 
 [letter]
 alpha = ["α", '\alpha']
@@ -195,7 +195,6 @@ because = ["∵", '\because']
 [binary]
 "+-" = ["±", '\pm']
 "-+" = ["∓", '\mp']
-"**" = ["∗", '\ast']
 "+" = ["+", "+"]
 "-" = ["−", "-"]
 "*" = ["⋅", '\cdot']
@@ -218,6 +217,7 @@ ox = ["⊗", '\otimes']
 otimes = ["⊗", '\otimes']
 oplus = ["⊕", '\oplus']
 star = ["⋆", '\star']
+ast = ["∗", '\ast']
 mod = ["mod", '\bmod']
 
 [punctuation]

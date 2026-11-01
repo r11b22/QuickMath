@@ -283,7 +283,8 @@ Done in stages, each in its own module:
 - Adding a symbol means adding one line to the file. Nothing else needs to
   change.
 - A few rules stay in code because they are grammar, not vocabulary: `inf_`
-  as infimum, `^*` as conjugate, `'` as prime.
+  as infimum, `**` as another spelling of `^`, `^*` as conjugate, `'` as
+  prime.
 
 ---
 

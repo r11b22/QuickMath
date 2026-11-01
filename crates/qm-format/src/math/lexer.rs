@@ -110,6 +110,11 @@ impl Lexer<'_> {
             ')' | ']' | '}' => self.single(TokenKind::Close),
             '_' => self.single(TokenKind::Underscore),
             '^' => self.single(TokenKind::Caret),
+            // `**` is a faster-to-type `^` (no dead key on many layouts).
+            '*' if self.rest().starts_with("**") => {
+                self.pos += 2;
+                TokenKind::Caret
+            }
             '\'' => self.single(TokenKind::Prime),
             _ => self.lex_operator_or_other(c),
         }
@@ -267,6 +272,19 @@ mod tests {
         assert_eq!(kinds("/"), vec![(TokenKind::Slash, "/")]);
         assert_eq!(kinds("//"), vec![(TokenKind::Operator, "//")]);
         assert_eq!(kinds("/="), vec![(TokenKind::Operator, "/=")]);
+    }
+
+    #[test]
+    fn double_star_is_a_caret() {
+        assert_eq!(
+            kinds("x**2"),
+            vec![
+                (TokenKind::Word, "x"),
+                (TokenKind::Caret, "**"),
+                (TokenKind::Number, "2")
+            ]
+        );
+        assert_eq!(kinds("*"), vec![(TokenKind::Operator, "*")]);
     }
 
     #[test]

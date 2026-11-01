@@ -246,6 +246,7 @@ Inside a run:
    the neighbouring runs.
 2. **`^` takes the rest of the run**: `x^n+1` = xⁿ⁺¹, `e^-x` = e⁻ˣ.
    `x^2 + 1` (with spaces) is x² + 1. Watch out: `x^2+1` is x²⁺¹.
+   `**` is another spelling of `^`: `x**2` = x².
 3. **`_` takes the rest of the run up to a `^`**: `x_i^2`, `a_n+1` = aₙ₊₁.
 4. **Digits directly after a variable are a subscript**: `x1` = x₁,
    `a12` = a₁₂, `alpha2` = α₂. This applies only to italic variables and
@@ -427,7 +428,7 @@ Theta Lambda Xi Pi Sigma Upsilon Phi Psi Omega`. `eps` is ε (`\varepsilon`) and
 
 **Binary:** `+`, `-` (−), `*` `cdot` ⋅, `xx` `times` ×, `div` ÷, `+-` `pm` ±,
 `-+` `mp` ∓, `cup` ∪, `cap` ∩, `and` `wedge` ∧, `or` `vee` ∨, `setminus` ∖,
-`@` `circ` ∘, `ox` `otimes` ⊗, `oplus` ⊕, `star` ⋆, `**` ∗, `mod`.
+`@` `circ` ∘, `ox` `otimes` ⊗, `oplus` ⊕, `star` ⋆, `ast` ∗, `mod`.
 `//` is a literal slash (no fraction). `||` is ‖.
 
 **Functions (upright operator atoms, spaced from their argument like TeX's

@@ -271,6 +271,20 @@ fn postfix_power_words() {
 #[test]
 fn star_as_script_is_the_conjugate_star() {
     assert_eq!(latex("z^*"), "z^{*}");
+    assert_eq!(latex("z***"), "z^{*}");
+}
+
+#[test]
+fn double_star_is_a_superscript_like_caret() {
+    assert_eq!(latex("x**2"), latex("x^2"));
+    assert_eq!(latex("e**-x"), "e^{-x}");
+    assert_eq!(latex("x_i**2"), "x_{i}^{2}");
+    assert_eq!(latex("a**2 + b"), "a^{2}+b");
+}
+
+#[test]
+fn ast_is_the_asterisk_operator() {
+    assert_eq!(latex("f ast g"), "f\\ast g");
 }
 
 #[test]

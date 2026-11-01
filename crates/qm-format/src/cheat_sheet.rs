@@ -74,6 +74,7 @@ pub(crate) const CHEAT_SHEET: &[CheatSheetEntry] = &[
         CheatSheetKind::Math,
     ),
     entry("x_i^2", "Subscript stops at ^", CheatSheetKind::Math),
+    entry("x**2", "** is the same as ^", CheatSheetKind::Math),
     entry(
         "x1  a12",
         "Digits right after a variable become a subscript",
