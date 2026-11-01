@@ -269,6 +269,16 @@ fn postfix_power_words() {
 }
 
 #[test]
+fn postfix_power_words_bind_tighter_than_the_slash() {
+    assert_eq!(latex("x sq/2"), "\\frac{x^{2}}{2}");
+    assert_eq!(latex("x sq / 2"), "\\frac{x^{2}}{2}");
+    assert_eq!(latex("1/x sq"), "\\frac{1}{x^{2}}");
+    assert_eq!(latex("1/x sq + 1"), "\\frac{1}{x^{2}}+1");
+    assert_eq!(latex("a/b cb/c"), "\\frac{\\frac{a}{b^{3}}}{c}");
+    assert_eq!(latex("x sq inv/2"), "\\frac{{x^{2}}^{-1}}{2}");
+}
+
+#[test]
 fn star_as_script_is_the_conjugate_star() {
     assert_eq!(latex("z^*"), "z^{*}");
     assert_eq!(latex("z***"), "z^{*}");

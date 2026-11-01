@@ -209,26 +209,40 @@ impl<'a> MathParser<'a> {
 
     /// End of the run or chunk starting at `start`. Whitespace does not end
     /// it right after a prefix word (so the word reaches its argument) or on
-    /// either side of a `/` (so `x^2 / 2` divides its neighbours).
+    /// either side of a `/` (so `x^2 / 2` divides its neighbours). A postfix
+    /// word next to a fraction stays in the run, so it applies to the
+    /// fraction part before it (`x sq/2`, `1/x sq`).
     fn stretch_end(&self, start: usize, end: usize, stretch: Stretch) -> usize {
         let mut pending_arguments = self.role(start).argument_count();
         let mut follows_slash = self.kind(start) == TokenKind::Slash;
+        let mut has_slash = follows_slash;
         let mut index = self.element_end(start, end);
         while index < end {
             let role = self.role(index);
-            if stretch == Stretch::Run && role.ends_run() {
+            let is_fraction_postfix = matches!(role, Role::Postfix(_))
+                && (has_slash || self.is_slash_after_postfixes(index, end));
+            if stretch == Stretch::Run && role.ends_run() && !is_fraction_postfix {
                 break;
             }
             let is_slash = self.kind(index) == TokenKind::Slash;
-            let is_glued = pending_arguments > 0 || follows_slash || is_slash;
+            let is_glued =
+                pending_arguments > 0 || follows_slash || is_slash || is_fraction_postfix;
             if self.tokens[index].has_space_before && !is_glued {
                 break;
             }
             pending_arguments = pending_arguments.saturating_sub(1) + role.argument_count();
             follows_slash = is_slash;
+            has_slash |= is_slash;
             index = self.element_end(index, end);
         }
         index
+    }
+
+    /// Whether a `/` follows the postfix words starting at `index` (`x sq inv/2`).
+    fn is_slash_after_postfixes(&self, index: usize, end: usize) -> bool {
+        (index..end)
+            .find(|&i| !matches!(self.role(i), Role::Postfix(_)))
+            .is_some_and(|i| self.kind(i) == TokenKind::Slash)
     }
 
     /// Indices of top-level tokens in `start..end` (bracket groups skipped).

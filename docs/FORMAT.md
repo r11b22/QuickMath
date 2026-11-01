@@ -295,7 +295,7 @@ not end that run:
 ### Postfix words
 
 `x sq` = x², `x cb` = x³, `A inv` = A⁻¹. Each applies to the term just before
-it.
+it. They bind tighter than `/`, so `x sq/2` = x²/2 and `1/x sq` = 1/x².
 
 ### Large operators and spoken limits
 
