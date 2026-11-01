@@ -9,12 +9,12 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::fs_util::{create_dir_all, write_atomically};
-use crate::{CoreError, Result, PROJECT_DIR_NAME};
+use crate::{CoreError, Result, SlideDeck, PROJECT_DIR_NAME};
 
 pub(crate) use paths::has_note_extension;
 pub use tree::{FileKind, FileNode};
 use workspace::WorkspaceFile;
-pub use workspace::WorkspaceState;
+pub use workspace::{NoteSlides, WorkspaceState};
 
 const TRASH_DIR_NAME: &str = "trash";
 const WORKSPACE_FILE_NAME: &str = "workspace.json";
@@ -134,6 +134,16 @@ impl Project {
     pub fn write_note(&self, path: &Path, contents: &str) -> Result<()> {
         let path = self.resolve(path)?;
         write_atomically(&path, contents.as_bytes())
+    }
+
+    /// Opens the slide deck (a PDF file) at `path` for rendering.
+    ///
+    /// Fails with [`CoreError::Io`] if the file cannot be read and with
+    /// [`CoreError::Slides`] if it is not a readable PDF.
+    pub fn open_slides(&self, path: &Path) -> Result<SlideDeck> {
+        let path = self.resolve(path)?;
+        let bytes = fs::read(&path).map_err(|error| CoreError::io(&path, error))?;
+        SlideDeck::from_bytes(&path, bytes)
     }
 
     /// Resolves a `[[wikilink]]` target the way Obsidian does: by note name

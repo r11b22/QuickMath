@@ -16,6 +16,11 @@ pub enum CoreError {
         language: String,
         message: String,
     },
+    /// A slide deck could not be read or rendered.
+    Slides {
+        path: PathBuf,
+        message: String,
+    },
 }
 
 impl CoreError {
@@ -41,6 +46,7 @@ impl fmt::Display for CoreError {
             CoreError::Dictionary { language, message } => {
                 write!(f, "{language} dictionary: {message}")
             }
+            CoreError::Slides { path, message } => write!(f, "{}: {message}", path.display()),
         }
     }
 }

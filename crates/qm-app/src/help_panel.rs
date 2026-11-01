@@ -5,8 +5,10 @@ use egui::{RichText, Sense};
 use qm_format::{CheatSheetKind, MathList};
 use qm_render::Theme;
 
-const SHORTCUTS: [(&str, &str); 6] = [
+const SHORTCUTS: [(&str, &str); 8] = [
     ("Ctrl+S", "Save now (notes also autosave after 1 s)"),
+    ("Ctrl+L", "Show or hide the slides"),
+    ("Ctrl+Page Down / Up", "Next / previous slide, while typing"),
     ("Tab / Shift+Tab", "Indent / outdent by two spaces"),
     (
         "Tab in math",

@@ -1,4 +1,14 @@
 {
   "open_note": "lecture 2.qm",
-  "expanded_folders": []
+  "expanded_folders": [],
+  "note_slides": {
+    "lecture 2.qm": {
+      "deck": "Pitch Deck - Wybe.pdf",
+      "page": 17
+    },
+    "lecture.qm": {
+      "deck": "Pitch Deck - Wybe.pdf",
+      "page": 1
+    }
+  }
 }

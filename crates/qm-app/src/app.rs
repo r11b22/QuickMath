@@ -151,6 +151,7 @@ impl QuickMathApp {
             ToolbarAction::Save
             | ToolbarAction::ToggleSidebar
             | ToolbarAction::ToggleHelp
+            | ToolbarAction::ToggleSlides
             | ToolbarAction::OpenExport
             | ToolbarAction::OpenSettings => {}
         }

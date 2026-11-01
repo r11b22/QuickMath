@@ -24,6 +24,7 @@ pub struct SettingsModel<'a> {
     pub view_mode: &'a mut ViewMode,
     pub is_sidebar_open: bool,
     pub is_help_open: bool,
+    pub is_slides_open: bool,
     pub spelling: SpellingSettings<'a>,
 }
 
@@ -99,6 +100,10 @@ fn layout_section(
     let mut is_help_open = model.is_help_open;
     if ui.checkbox(&mut is_help_open, "Show cheat sheet").clicked() {
         *action = Some(ToolbarAction::ToggleHelp);
+    }
+    let mut is_slides_open = model.is_slides_open;
+    if ui.checkbox(&mut is_slides_open, "Show slides").clicked() {
+        *action = Some(ToolbarAction::ToggleSlides);
     }
 }
 
@@ -188,6 +193,7 @@ mod tests {
                     view_mode,
                     is_sidebar_open: true,
                     is_help_open: false,
+                    is_slides_open: false,
                     spelling: SpellingSettings {
                         available: languages,
                         enabled,
@@ -251,6 +257,8 @@ mod tests {
         assert_eq!(harness.last_action, Some(ToolbarAction::ToggleSidebar));
         harness.click_label("Show cheat sheet");
         assert_eq!(harness.last_action, Some(ToolbarAction::ToggleHelp));
+        harness.click_label("Show slides");
+        assert_eq!(harness.last_action, Some(ToolbarAction::ToggleSlides));
     }
 
     #[test]

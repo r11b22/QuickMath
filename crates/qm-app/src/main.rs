@@ -15,6 +15,8 @@ mod practice;
 mod preview_pane;
 mod prompts;
 mod settings_window;
+mod slide_renderer;
+mod slides_pane;
 mod spelling;
 mod status_bar;
 mod text_metrics;

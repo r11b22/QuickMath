@@ -1,4 +1,5 @@
-//! The top toolbar: app menu, project name, view toggles, theme, export, help.
+//! The top toolbar: app menu, project name, view toggles, slides, theme,
+//! export, help.
 
 use std::path::PathBuf;
 
@@ -30,6 +31,7 @@ pub enum ToolbarAction {
     ToggleSidebar,
     ToggleTheme,
     ToggleHelp,
+    ToggleSlides,
     OpenExport,
     OpenPractice,
     OpenSettings,
@@ -44,6 +46,7 @@ pub struct ToolbarModel<'a> {
     pub recent_projects: &'a [PathBuf],
     pub view_mode: &'a mut ViewMode,
     pub is_help_open: bool,
+    pub is_slides_open: bool,
 }
 
 pub fn show_toolbar(
@@ -72,6 +75,13 @@ pub fn show_toolbar(
                 .clicked()
             {
                 action = Some(ToolbarAction::ToggleHelp);
+            }
+            if ui
+                .selectable_label(model.is_slides_open, "Slides")
+                .on_hover_text("Show lecture slides (Ctrl+L)")
+                .clicked()
+            {
+                action = Some(ToolbarAction::ToggleSlides);
             }
             let theme_icon = if theme.is_dark { "☀" } else { "🌙" };
             if ui

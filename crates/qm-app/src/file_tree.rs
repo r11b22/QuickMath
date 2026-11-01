@@ -11,8 +11,14 @@ use qm_render::Theme;
 #[derive(Debug, Clone, PartialEq)]
 pub enum FileTreeAction {
     OpenNote(PathBuf),
-    NewNote { folder: PathBuf },
-    NewFolder { parent: PathBuf },
+    /// Show this PDF in the slides pane.
+    OpenSlides(PathBuf),
+    NewNote {
+        folder: PathBuf,
+    },
+    NewFolder {
+        parent: PathBuf,
+    },
     Rename(PathBuf),
     Delete(PathBuf),
 }
@@ -48,6 +54,14 @@ impl FileTreeState {
 struct TreeView<'a> {
     theme: &'a Theme,
     selected: Option<&'a Path>,
+    selected_slides: Option<&'a Path>,
+}
+
+/// Which entries the tree highlights: the open note and the slides shown.
+#[derive(Clone, Copy, Default)]
+pub struct TreeSelection<'a> {
+    pub note: Option<&'a Path>,
+    pub slides: Option<&'a Path>,
 }
 
 /// Draws the tree below `root` (the root folder itself is not shown).
@@ -56,12 +70,16 @@ pub fn show_file_tree(
     root: &FileNode,
     state: &mut FileTreeState,
     theme: &Theme,
-    selected: Option<&Path>,
+    selection: TreeSelection,
 ) -> Option<FileTreeAction> {
     let FileKind::Folder(children) = &root.kind else {
         return None;
     };
-    let view = TreeView { theme, selected };
+    let view = TreeView {
+        theme,
+        selected: selection.note,
+        selected_slides: selection.slides,
+    };
     let mut action = None;
     egui::ScrollArea::vertical()
         .id_salt("file_tree_scroll")
@@ -137,6 +155,20 @@ fn show_node(
                 ui.separator();
                 item_menu(ui, &node.path, action);
             });
+        }
+        FileKind::Other if qm_core::is_slide_deck(&node.path) => {
+            let response = TreeRow {
+                depth,
+                icon: "🗎",
+                label: &node.name,
+                color: view.theme.text_muted,
+                is_selected: view.selected_slides == Some(node.path.as_path()),
+            }
+            .show(ui, view.theme)
+            .on_hover_text("Show in the slides pane");
+            if response.clicked() {
+                *action = Some(FileTreeAction::OpenSlides(node.path.clone()));
+            }
         }
         FileKind::Other => {
             let row = TreeRow {

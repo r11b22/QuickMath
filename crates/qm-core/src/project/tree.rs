@@ -2,16 +2,16 @@
 
 use std::cmp::Ordering;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use super::paths::{has_note_extension, is_hidden};
-use crate::{CoreError, Result};
+use crate::{is_slide_deck, CoreError, Result};
 
 /// A node in the project's file tree. Hidden entries (starting with `.`) are omitted.
 #[derive(Debug, Clone, PartialEq)]
 pub struct FileNode {
     pub name: String,
-    pub path: std::path::PathBuf,
+    pub path: PathBuf,
     pub kind: FileKind,
 }
 
@@ -33,6 +33,17 @@ impl FileNode {
                 child.walk(visit);
             }
         }
+    }
+
+    /// Every slide deck (PDF file) at or below this node, in tree order.
+    pub fn slide_decks(&self) -> Vec<PathBuf> {
+        let mut decks = Vec::new();
+        self.walk(&mut |node| {
+            if node.kind == FileKind::Other && is_slide_deck(&node.path) {
+                decks.push(node.path.clone());
+            }
+        });
+        decks
     }
 }
 

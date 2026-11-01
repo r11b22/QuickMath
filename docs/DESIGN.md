@@ -48,8 +48,8 @@ The project is a Cargo workspace with four crates under `crates/`.
   LaTeX conversion of math, syntax highlighting, cheat sheet. Pure functions
   on strings. No I/O, no GUI.
 - **qm-core**: the backend. Projects (folders of notes), file operations,
-  settings, practice progress, spell checking and all exporters (Obsidian
-  Markdown, LaTeX, PDF).
+  settings, practice progress, spell checking, slide decks and all exporters
+  (Obsidian Markdown, LaTeX, PDF).
 - **qm-render**: draws a parsed document or a single formula inside egui. Its
   own math typesetter and paragraph layout, plus the colour theme.
 - **qm-app**: the desktop program (binary `quick-math`). Screens, panes,
@@ -60,8 +60,9 @@ The project is a Cargo workspace with four crates under `crates/`.
 - qm-format depends on nothing at runtime. It uses `toml` only in its build
   script and tests.
 - qm-core depends on qm-format, plus typst (PDF), serde/serde_json (settings
-  files), dirs (config directory) and spellbook (Hunspell-compatible spell
-  checking).
+  files), dirs (config directory), spellbook (Hunspell-compatible spell
+  checking) and hayro (pure-Rust PDF rendering for slide decks, with the
+  standard PDF fonts built in).
 - qm-render depends on qm-format and egui, plus typst-assets for fonts.
 - qm-app depends on all three, plus eframe and rfd (native file dialogs).
 - qm-core and qm-render do not depend on each other.
@@ -160,6 +161,23 @@ The code follows model–view–controller, adapted to egui's immediate mode.
    it produces the same LaTeX, or the same drawn symbols, as the answer, so
    any spelling that looks the same is accepted.
 3. Results (stars, best WPM) are stored through `qm_core::PracticeProgress`.
+
+### 3.6 Slides
+
+1. The user picks a PDF from the project (in the slides pane's list, or by
+   clicking it in the file tree). Any PDF in any folder of the project can
+   be picked.
+2. The deck is linked to the open note together with the page shown. The
+   link is saved in the workspace state, so opening the note brings its
+   slides back at the same page. A note without a link shows no slides.
+3. Each open deck gets its own render thread (`slide_renderer.rs`). It opens
+   the file through `Project::open_slides` and renders the pages the pane
+   asks for, newest request first. The thread wakes the UI when a page is
+   done, so nothing polls on a timer.
+4. The pane keeps the current page and its neighbours as textures and asks
+   for the next page ahead of time, so turning a page is instant.
+5. A missing or unreadable deck shows a toast and a message in the pane. The
+   link is kept, so the deck shows again once the file is back.
 
 ---
 
@@ -276,6 +294,9 @@ Done in stages, each in its own module:
 - `PracticeProgress`, `LevelRecord`: practice game results.
 - `Language`, `Dictionary`, `SpellChecker`, `WordList`: spell checking (see
   5.5).
+- `NoteSlides`: the slide deck linked to a note and its page.
+- `SlideDeck`, `SlideImage`, `is_slide_deck`: slide decks (PDF files), opened
+  with `Project::open_slides` and rendered one page at a time.
 - `ExportFormat`, `export_note`, `export_project`, and the string renderers in
   `export::{latex, obsidian, pdf}`.
 - `CoreError` and `Result`.
@@ -298,7 +319,8 @@ Done in stages, each in its own module:
 ### 5.3 Stored files
 
 - Notes: `.qm` files anywhere in the project.
-- Workspace state: `.quickmath/workspace.json` (open note, expanded folders).
+- Workspace state: `.quickmath/workspace.json` (open note, expanded folders,
+  and per note its slide deck and last viewed page).
   Paths are stored relative to the root with `/` separators, so a project can
   be moved or synced between machines.
 - Settings: `quickmath/settings.json` in the OS config directory (recent
@@ -433,9 +455,11 @@ Done in stages, each in its own module:
 - `spelling.rs` (`Spelling`): the available languages, the personal word
   list and the loaded spell checker. Dictionaries load on a background
   thread, polled each frame.
+- `slide_renderer.rs` (`SlideRenderer`): the render thread for the open
+  slide deck, and the messages to and from it.
 - One module per pane or widget: `toolbar.rs`, `file_tree.rs`, `outline.rs`,
   `editor.rs`, `completion_popup.rs`, `misspellings.rs`, `preview_pane.rs`, `status_bar.rs`,
-  `help_panel.rs`, `export_dialog.rs`, `settings_window.rs`, `prompts.rs` (small modals),
+  `help_panel.rs`, `slides_pane.rs`, `export_dialog.rs`, `settings_window.rs`, `prompts.rs` (small modals),
   `toasts.rs` (notifications).
 - Pure helpers with no egui state: `text_metrics.rs` (cursor positions, word
   count, text edits), `autosave.rs` (debounce timer), `highlight.rs` (span to
@@ -458,8 +482,8 @@ Done in stages, each in its own module:
 - The preview only scrolls when the editor cursor moves to another line, or
   on an explicit request (e.g. from the outline), so the user can scroll it
   freely otherwise.
-- Long-running work (exports, loading dictionaries) runs on a background
-  thread and is polled each frame.
+- Long-running work (exports, loading dictionaries, rendering slides) runs
+  on a background thread and is polled each frame.
 
 ### 7.3 Layout
 
@@ -468,14 +492,20 @@ Done in stages, each in its own module:
 - Centre: editor, preview, or both side by side (`ViewMode`).
 - Right: help drawer with the cheat sheet, every symbol from the syntax file
   (click to insert) and keyboard shortcuts.
+- Slides pane: below the preview, with a draggable split. With the preview
+  hidden it takes the space to the right of the editor instead. Hidden by
+  default; toggled from the toolbar, the settings window or Ctrl+L.
+- Ctrl+Page Down and Ctrl+Page Up turn the slides while typing. They are
+  taken before the editor draws, so the cursor never leaves the editor.
 - Misspelled words get a wavy underline in the error colour. Right-clicking
   one opens a menu with corrections and "Add to dictionary". Suggestions are
   only computed then, because they take tens of milliseconds per language.
 - The settings window (☰ → Settings…) holds every setting: dark theme,
-  view mode, sidebar and cheat sheet visibility, and spelling languages.
+  view mode, sidebar, cheat sheet and slides visibility, and spelling
+  languages.
   Changes apply at once.
-- The toolbar keeps quick toggles for the theme, view mode, sidebar and
-  cheat sheet. They give the same actions as the settings window, so both
+- The toolbar keeps quick toggles for the theme, view mode, sidebar, cheat
+  sheet and slides. They give the same actions as the settings window, so both
   stay in step.
 - Math suggestions float under the word being typed. Only Tab accepts one;
   Up/Down choose and Escape hides them. Enter and Space keep their normal
@@ -509,7 +539,8 @@ Done in stages, each in its own module:
   (`spelling.rs`), robustness on bad input (`robustness.rs`), the syntax file generator
   (`syntax_file.rs`).
 - qm-core: project operations and exports against real temporary folders
-  (`project.rs`, `export.rs`), exporting real parser output
+  (`project.rs`, `export.rs`), opening and rendering real PDFs made by the
+  PDF exporter (`slides.rs`), exporting real parser output
   (`parsed_notes.rs`), and finding languages and checking words with small
   test dictionaries and the built-in ones (`spelling.rs`).
 - qm-render: layout metrics and cache behaviour with real fonts in a

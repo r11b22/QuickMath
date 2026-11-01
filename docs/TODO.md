@@ -1,6 +1,14 @@
 # TODO
 
-- [ ] Slides integration
+- [x] Slides integration: show the lecture's slides (PDF files) while notating
+  - [x] Slides pane on the right, below the preview, with a draggable split
+  - [x] Hidden by default; toggle from the toolbar, settings window and a shortcut
+  - [x] Open any PDF in the project and link it to the current note, so it reopens with the note
+  - [x] Previous/next page and a page number, with shortcuts that work while
+        the editor has focus, so the cursor never leaves the editor
+  - [x] Remember the last viewed page per note
+  - [x] Render pages on a background thread and cache them, so typing never stutters
+  - [x] Show a toast when a slides file is missing or can't be read
 - [ ] Random practice example generation
 - [ ] Add string lookup for possible translations
 - [x] Settings menu

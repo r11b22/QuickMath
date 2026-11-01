@@ -1,9 +1,12 @@
 //! Project (vault) operations against real temporary directories.
 
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use qm_core::{CoreError, FileKind, FileNode, Project, WorkspaceState, PROJECT_DIR_NAME};
+use qm_core::{
+    CoreError, FileKind, FileNode, NoteSlides, Project, WorkspaceState, PROJECT_DIR_NAME,
+};
 use tempfile::TempDir;
 
 fn new_project() -> (TempDir, Project) {
@@ -507,6 +510,7 @@ fn workspace_round_trips_with_relative_paths_on_disk() {
     let state = WorkspaceState {
         open_note: Some(note.clone()),
         expanded_folders: vec![folder.clone()],
+        note_slides: BTreeMap::new(),
     };
 
     project.save_workspace(&state).unwrap();
@@ -530,6 +534,7 @@ fn workspace_drops_entries_that_no_longer_exist() {
         .save_workspace(&WorkspaceState {
             open_note: Some(note.clone()),
             expanded_folders: vec![kept.clone(), gone.clone()],
+            ..WorkspaceState::default()
         })
         .unwrap();
     fs::remove_dir(&gone).unwrap();
@@ -541,7 +546,8 @@ fn workspace_drops_entries_that_no_longer_exist() {
         state,
         WorkspaceState {
             open_note: None,
-            expanded_folders: vec![kept]
+            expanded_folders: vec![kept],
+            ..WorkspaceState::default()
         }
     );
 }
@@ -569,10 +575,67 @@ fn save_workspace_refuses_paths_outside_the_project() {
     let outside = tempfile::tempdir().unwrap();
     let state = WorkspaceState {
         open_note: Some(outside.path().join("x.qm")),
-        expanded_folders: vec![],
+        ..WorkspaceState::default()
     };
     assert!(matches!(
         project.save_workspace(&state),
         Err(CoreError::OutsideProject(_))
     ));
+}
+
+#[test]
+fn workspace_round_trips_slides_links_with_relative_paths() {
+    let (_dir, project) = new_project();
+    let note = project.create_note(project.root(), "lecture 1").unwrap();
+    let deck = project.root().join("slides/week 1.pdf");
+    let state = WorkspaceState {
+        note_slides: BTreeMap::from([(note.clone(), NoteSlides { deck, page: 4 })]),
+        ..WorkspaceState::default()
+    };
+
+    project.save_workspace(&state).unwrap();
+
+    assert_eq!(project.load_workspace(), state);
+    let json = fs::read_to_string(project.root().join(".quickmath/workspace.json")).unwrap();
+    assert!(json.contains("\"lecture 1.qm\""), "{json}");
+    assert!(json.contains("\"slides/week 1.pdf\""), "{json}");
+}
+
+#[test]
+fn workspace_keeps_links_to_missing_decks_but_drops_links_of_missing_notes() {
+    let (_dir, project) = new_project();
+    let kept = project.create_note(project.root(), "kept").unwrap();
+    let gone = project.create_note(project.root(), "gone").unwrap();
+    let missing_deck = NoteSlides {
+        deck: project.root().join("missing.pdf"),
+        page: 2,
+    };
+    project
+        .save_workspace(&WorkspaceState {
+            note_slides: BTreeMap::from([
+                (kept.clone(), missing_deck.clone()),
+                (gone.clone(), missing_deck.clone()),
+            ]),
+            ..WorkspaceState::default()
+        })
+        .unwrap();
+    fs::remove_file(&gone).unwrap();
+
+    let state = project.load_workspace();
+
+    assert_eq!(state.note_slides, BTreeMap::from([(kept, missing_deck)]));
+}
+
+#[test]
+fn workspace_ignores_slides_links_that_escape_the_project() {
+    let (_dir, project) = new_project();
+    project.create_note(project.root(), "note").unwrap();
+    let path = project.root().join(".quickmath/workspace.json");
+    fs::write(
+        &path,
+        r#"{"note_slides": {"note.qm": {"deck": "../../secret.pdf", "page": 0}}}"#,
+    )
+    .unwrap();
+
+    assert_eq!(project.load_workspace(), WorkspaceState::default());
 }

@@ -1,31 +1,39 @@
 //! An open project: file tree, open note, panes and dialogs, and the actions
 //! that tie them together.
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use egui::{Key, KeyboardShortcut, Modifiers, RichText};
-use qm_core::{FileNode, Project, WorkspaceState};
+use qm_core::{FileNode, NoteSlides, Project, WorkspaceState};
 use qm_render::Theme;
 
 use crate::editor::{EditorAction, EditorView};
 use crate::export_dialog::{ExportDialog, ExportOutcome, ExportSource};
-use crate::file_tree::{self, FileTreeAction, FileTreeState};
+use crate::file_tree::{self, FileTreeAction, FileTreeState, TreeSelection};
 use crate::help_panel::HelpPanel;
 use crate::note::OpenNote;
 use crate::outline;
 use crate::preview_pane::{self, PreviewSync};
 use crate::prompts::{self, Prompt, PromptOutcome};
 use crate::settings_window::{SettingsModel, SettingsWindow, SpellingSettings};
+use crate::slides_pane::{SlidesAction, SlidesPane};
 use crate::spelling::SpellCheck;
 use crate::status_bar;
 use crate::toasts::Toasts;
 use crate::toolbar::{self, ToolbarAction, ToolbarModel, ViewMode};
 
 const SAVE_SHORTCUT: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key::S);
+const TOGGLE_SLIDES_SHORTCUT: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key::L);
+const NEXT_SLIDE_SHORTCUT: KeyboardShortcut =
+    KeyboardShortcut::new(Modifiers::COMMAND, Key::PageDown);
+const PREVIOUS_SLIDE_SHORTCUT: KeyboardShortcut =
+    KeyboardShortcut::new(Modifiers::COMMAND, Key::PageUp);
 const SIDEBAR_DEFAULT_WIDTH: f32 = 250.0;
 const OUTLINE_DEFAULT_HEIGHT: f32 = 220.0;
 const HELP_DEFAULT_WIDTH: f32 = 340.0;
 const MIN_PANE_WIDTH: f32 = 240.0;
+const MIN_PANE_HEIGHT: f32 = 120.0;
 
 /// Which panes are visible.
 #[derive(Debug)]
@@ -33,6 +41,7 @@ struct PaneLayout {
     view_mode: ViewMode,
     is_sidebar_open: bool,
     is_help_open: bool,
+    is_slides_open: bool,
 }
 
 /// Shared, read-mostly inputs for drawing one frame.
@@ -64,6 +73,11 @@ pub struct Workspace {
     export: ExportDialog,
     settings: SettingsWindow,
     help: HelpPanel,
+    slides: SlidesPane,
+    /// The slide deck linked to each note, and its last viewed page.
+    slide_links: BTreeMap<PathBuf, NoteSlides>,
+    /// Every PDF in the project, for the slides pane's picker.
+    slide_decks: Vec<PathBuf>,
 }
 
 impl Workspace {
@@ -84,11 +98,15 @@ impl Workspace {
                 view_mode: ViewMode::Split,
                 is_sidebar_open: true,
                 is_help_open: false,
+                is_slides_open: false,
             },
             prompt: None,
             export: ExportDialog::default(),
             settings: SettingsWindow::default(),
             help: HelpPanel::default(),
+            slides: SlidesPane::default(),
+            slide_links: saved_state.note_slides,
+            slide_decks: Vec::new(),
         };
         workspace.refresh_tree(toasts);
         if let Some(path) = saved_state.open_note.filter(|path| path.is_file()) {
@@ -122,6 +140,8 @@ impl Workspace {
         if ui.input_mut(|input| input.consume_shortcut(&SAVE_SHORTCUT)) {
             self.save_note(toasts);
         }
+        // Before the editor draws, so these keys never reach the text field.
+        self.handle_slide_shortcuts(ui);
         let toolbar_action = self
             .show_toolbar(ui, frame)
             .and_then(|action| self.handle_toolbar_action(action, toasts));
@@ -129,6 +149,7 @@ impl Workspace {
         self.show_sidebar(ui, frame.theme, toasts);
         self.show_help_panel(ui, frame.theme);
         let editor_action = self.show_centre(ui, frame, toasts);
+        self.remember_slides();
         self.show_dialogs(ui.ctx(), frame.theme, toasts);
         let settings_action = self
             .show_settings(ui.ctx(), frame)
@@ -154,6 +175,7 @@ impl Workspace {
                     recent_projects: frame.recent_projects,
                     view_mode: &mut self.layout.view_mode,
                     is_help_open: self.layout.is_help_open,
+                    is_slides_open: self.layout.is_slides_open,
                 };
                 toolbar::show_toolbar(ui, model, theme)
             })
@@ -169,6 +191,7 @@ impl Workspace {
             view_mode: &mut self.layout.view_mode,
             is_sidebar_open: self.layout.is_sidebar_open,
             is_help_open: self.layout.is_help_open,
+            is_slides_open: self.layout.is_slides_open,
             spelling: frame.spelling,
         };
         self.settings.show(ctx, model, frame.theme)
@@ -188,6 +211,7 @@ impl Workspace {
                 self.layout.is_sidebar_open = !self.layout.is_sidebar_open
             }
             ToolbarAction::ToggleHelp => self.layout.is_help_open = !self.layout.is_help_open,
+            ToolbarAction::ToggleSlides => self.layout.is_slides_open = !self.layout.is_slides_open,
             ToolbarAction::OpenExport => self.export.open(),
             ToolbarAction::OpenSettings => self.settings.open(),
             other => return Some(other),
@@ -249,9 +273,13 @@ impl Workspace {
         });
         match &self.tree {
             Some(tree) => {
-                let selected = self.note.as_ref().map(OpenNote::path);
+                let current_slides = self.slides.current();
+                let selection = TreeSelection {
+                    note: self.note.as_ref().map(OpenNote::path),
+                    slides: current_slides.as_ref().map(|slides| slides.deck.as_path()),
+                };
                 if let Some(tree_action) =
-                    file_tree::show_file_tree(ui, tree, &mut self.tree_state, theme, selected)
+                    file_tree::show_file_tree(ui, tree, &mut self.tree_state, theme, selection)
                 {
                     action = Some(tree_action);
                 }
@@ -329,7 +357,18 @@ impl Workspace {
     ) -> Option<EditorAction> {
         let theme = frame.theme;
         let spell_check = frame.spell_check;
+        let is_slides_open = self.layout.is_slides_open;
+        let slides_frame = egui::Frame::new()
+            .fill(theme.surface)
+            .inner_margin(egui::Margin::same(8));
+        let mut slides_action = None;
         let Some(note) = &mut self.note else {
+            if is_slides_open {
+                slides_action = show_slides_below(ui, slides_frame, |ui| {
+                    self.slides
+                        .show(ui, &self.project, &self.slide_decks, theme)
+                });
+            }
             egui::CentralPanel::default()
                 .frame(egui::Frame::new().fill(theme.background))
                 .show(ui, |ui| {
@@ -341,13 +380,43 @@ impl Workspace {
                         });
                     }
                 });
+            if let Some(action) = slides_action {
+                self.apply_slides_action(action, toasts);
+            }
             return None;
         };
         let editor_frame = egui::Frame::new().fill(theme.background);
         let preview_frame = egui::Frame::new().fill(theme.surface);
         let mut clicked_wikilink = None;
         let mut editor_action = None;
-        match self.layout.view_mode {
+        let view_mode = self.layout.view_mode;
+        // With the preview hidden, the slides take the space to the right of the editor.
+        let is_editor_beside = match view_mode {
+            ViewMode::Split => true,
+            ViewMode::EditorOnly => is_slides_open,
+            ViewMode::PreviewOnly => false,
+        };
+        if is_editor_beside {
+            let width = ui.available_width();
+            egui::Panel::left("editor_pane")
+                .frame(editor_frame)
+                .resizable(true)
+                .default_size(width / 2.0)
+                .size_range(MIN_PANE_WIDTH..=(width - MIN_PANE_WIDTH).max(MIN_PANE_WIDTH))
+                .show(ui, |ui| {
+                    editor_action = self.editor.show(ui, note, theme, spell_check);
+                });
+        }
+        match view_mode {
+            ViewMode::EditorOnly if is_slides_open => {
+                egui::CentralPanel::default()
+                    .frame(slides_frame)
+                    .show(ui, |ui| {
+                        slides_action =
+                            self.slides
+                                .show(ui, &self.project, &self.slide_decks, theme);
+                    });
+            }
             ViewMode::EditorOnly => {
                 egui::CentralPanel::default()
                     .frame(editor_frame)
@@ -355,7 +424,13 @@ impl Workspace {
                         editor_action = self.editor.show(ui, note, theme, spell_check);
                     });
             }
-            ViewMode::PreviewOnly => {
+            ViewMode::Split | ViewMode::PreviewOnly => {
+                if is_slides_open {
+                    slides_action = show_slides_below(ui, slides_frame, |ui| {
+                        self.slides
+                            .show(ui, &self.project, &self.slide_decks, theme)
+                    });
+                }
                 egui::CentralPanel::default()
                     .frame(preview_frame)
                     .show(ui, |ui| {
@@ -363,23 +438,9 @@ impl Workspace {
                             preview_pane::show_preview(ui, note, &mut self.preview_sync, theme);
                     });
             }
-            ViewMode::Split => {
-                let width = ui.available_width();
-                egui::Panel::left("editor_pane")
-                    .frame(editor_frame)
-                    .resizable(true)
-                    .default_size(width / 2.0)
-                    .size_range(MIN_PANE_WIDTH..=(width - MIN_PANE_WIDTH).max(MIN_PANE_WIDTH))
-                    .show(ui, |ui| {
-                        editor_action = self.editor.show(ui, note, theme, spell_check);
-                    });
-                egui::CentralPanel::default()
-                    .frame(preview_frame)
-                    .show(ui, |ui| {
-                        clicked_wikilink =
-                            preview_pane::show_preview(ui, note, &mut self.preview_sync, theme);
-                    });
-            }
+        }
+        if let Some(action) = slides_action {
+            self.apply_slides_action(action, toasts);
         }
         if let Some(target) = clicked_wikilink {
             self.follow_wikilink(&target, toasts);
@@ -437,6 +498,73 @@ impl Workspace {
 
     // ----- actions -----
 
+    fn handle_slide_shortcuts(&mut self, ui: &mut egui::Ui) {
+        let (toggle, next, previous) = ui.input_mut(|input| {
+            (
+                input.consume_shortcut(&TOGGLE_SLIDES_SHORTCUT),
+                input.consume_shortcut(&NEXT_SLIDE_SHORTCUT),
+                input.consume_shortcut(&PREVIOUS_SLIDE_SHORTCUT),
+            )
+        });
+        if toggle {
+            self.layout.is_slides_open = !self.layout.is_slides_open;
+        }
+        if !self.layout.is_slides_open {
+            return;
+        }
+        if next {
+            self.slides.next_page();
+        }
+        if previous {
+            self.slides.previous_page();
+        }
+    }
+
+    fn apply_slides_action(&mut self, action: SlidesAction, toasts: &mut Toasts) {
+        match action {
+            SlidesAction::PickDeck(deck) => self.show_slides(deck),
+            SlidesAction::Failed(message) => {
+                toasts.error(format!("Could not show the slides: {message}"))
+            }
+        }
+    }
+
+    /// Opens `deck` in the slides pane and links it to the open note. A deck
+    /// that is already shown stays on its page; another starts at the first.
+    fn show_slides(&mut self, deck: PathBuf) {
+        let is_shown = self
+            .slides
+            .current()
+            .is_some_and(|current| current.deck == deck);
+        if !is_shown {
+            self.slides.open(NoteSlides { deck, page: 0 });
+        }
+        self.layout.is_slides_open = true;
+        self.remember_slides();
+    }
+
+    /// Links the deck and page shown to the open note, so they come back with it.
+    fn remember_slides(&mut self) {
+        let (Some(note), Some(current)) = (&self.note, self.slides.current()) else {
+            return;
+        };
+        if self.slide_links.get(note.path()) != Some(&current) {
+            self.slide_links.insert(note.path().to_path_buf(), current);
+        }
+    }
+
+    /// Shows the slides linked to the open note, or none.
+    fn restore_slides(&mut self) {
+        let link = self
+            .note
+            .as_ref()
+            .and_then(|note| self.slide_links.get(note.path()));
+        match link {
+            Some(link) => self.slides.open(link.clone()),
+            None => self.slides.close(),
+        }
+    }
+
     /// Saves the open note. Returns `false` (and reports) if saving failed.
     pub fn save_note(&mut self, toasts: &mut Toasts) -> bool {
         let Some(note) = &mut self.note else {
@@ -455,6 +583,7 @@ impl Workspace {
         let state = WorkspaceState {
             open_note: self.note.as_ref().map(|note| note.path().to_path_buf()),
             expanded_folders: self.tree_state.expanded.iter().cloned().collect(),
+            note_slides: self.slide_links.clone(),
         };
         if let Err(error) = self.project.save_workspace(&state) {
             toasts.error(format!("Could not remember the workspace layout: {error}"));
@@ -463,10 +592,14 @@ impl Workspace {
 
     fn refresh_tree(&mut self, toasts: &mut Toasts) {
         match self.project.file_tree() {
-            Ok(tree) => self.tree = Some(tree),
+            Ok(tree) => {
+                self.slide_decks = tree.slide_decks();
+                self.tree = Some(tree);
+            }
             Err(error) => {
                 toasts.error(format!("Could not read the project: {error}"));
                 self.tree = None;
+                self.slide_decks.clear();
             }
         }
     }
@@ -480,10 +613,12 @@ impl Workspace {
         if !self.save_note(toasts) {
             return;
         }
+        self.remember_slides();
         match OpenNote::load(&self.project, path) {
             Ok(note) => {
                 self.tree_state.reveal(self.project.root(), path);
                 self.note = Some(note);
+                self.restore_slides();
                 self.persist_state(toasts);
             }
             Err(error) => toasts.error(format!("Could not open note: {error}")),
@@ -500,6 +635,7 @@ impl Workspace {
     fn apply_tree_action(&mut self, action: FileTreeAction, toasts: &mut Toasts) {
         match action {
             FileTreeAction::OpenNote(path) => self.open_note(&path, toasts),
+            FileTreeAction::OpenSlides(deck) => self.show_slides(deck),
             FileTreeAction::NewNote { folder } => {
                 self.prompt = Some(Prompt::NewNote {
                     folder,
@@ -558,10 +694,24 @@ impl Workspace {
                         note.set_path(updated);
                     }
                 }
+                self.follow_rename_in_slides(path, &new_path);
                 self.refresh_tree(toasts);
                 self.persist_state(toasts);
             }
             Err(error) => toasts.error(format!("Could not rename: {error}")),
+        }
+    }
+
+    /// Keeps slides links and the shown deck pointing at renamed notes and decks.
+    fn follow_rename_in_slides(&mut self, old: &Path, new: &Path) {
+        let links = std::mem::take(&mut self.slide_links);
+        self.slide_links = moved_slide_links(links, old, new);
+        let moved_deck = self
+            .slides
+            .current()
+            .and_then(|current| moved_path(&current.deck, old, new));
+        if let Some(deck) = moved_deck {
+            self.slides.set_deck_path(deck);
         }
     }
 
@@ -606,6 +756,40 @@ fn moved_path(note_path: &Path, old: &Path, new: &Path) -> Option<PathBuf> {
             new.join(relative)
         }
     })
+}
+
+/// `links` with every note and deck path inside `old` moved to `new`.
+fn moved_slide_links(
+    links: BTreeMap<PathBuf, NoteSlides>,
+    old: &Path,
+    new: &Path,
+) -> BTreeMap<PathBuf, NoteSlides> {
+    links
+        .into_iter()
+        .map(|(note, mut slides)| {
+            if let Some(deck) = moved_path(&slides.deck, old, new) {
+                slides.deck = deck;
+            }
+            let note = moved_path(&note, old, new).unwrap_or(note);
+            (note, slides)
+        })
+        .collect()
+}
+
+/// Draws the slides pane in a resizable strip along the bottom of the space left in `ui`.
+fn show_slides_below<R>(
+    ui: &mut egui::Ui,
+    frame: egui::Frame,
+    show_slides: impl FnOnce(&mut egui::Ui) -> Option<R>,
+) -> Option<R> {
+    let height = ui.available_height();
+    egui::Panel::bottom("slides_pane")
+        .frame(frame)
+        .resizable(true)
+        .default_size(height / 2.0)
+        .size_range(MIN_PANE_HEIGHT..=(height - MIN_PANE_HEIGHT).max(MIN_PANE_HEIGHT))
+        .show(ui, show_slides)
+        .inner
 }
 
 /// Where to create the note for an unresolved `[[target]]`: `dir/name`
@@ -676,6 +860,42 @@ mod tests {
             Path::new("/v/week 1"),
         );
         assert_eq!(moved, Some(PathBuf::from("/v/week 1/limits.qm")));
+    }
+
+    #[test]
+    fn moved_slide_links_follow_renamed_notes_and_decks() {
+        let links = BTreeMap::from([
+            (
+                PathBuf::from("/v/week1/notes.qm"),
+                NoteSlides {
+                    deck: PathBuf::from("/v/week1/slides.pdf"),
+                    page: 3,
+                },
+            ),
+            (
+                PathBuf::from("/v/other.qm"),
+                NoteSlides {
+                    deck: PathBuf::from("/v/other.pdf"),
+                    page: 0,
+                },
+            ),
+        ]);
+
+        let moved = moved_slide_links(links, Path::new("/v/week1"), Path::new("/v/week 1"));
+
+        assert_eq!(
+            moved.get(Path::new("/v/week 1/notes.qm")),
+            Some(&NoteSlides {
+                deck: PathBuf::from("/v/week 1/slides.pdf"),
+                page: 3
+            })
+        );
+        assert_eq!(
+            moved
+                .get(Path::new("/v/other.qm"))
+                .map(|slides| &slides.deck),
+            Some(&PathBuf::from("/v/other.pdf"))
+        );
     }
 
     #[test]

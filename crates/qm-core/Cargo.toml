@@ -18,6 +18,9 @@ dirs = "6"
 # Pure-Rust Hunspell-compatible spell checker (from the Helix editor), so
 # any Hunspell dictionary adds a language and no C library is needed.
 spellbook = "0.4.2"
+# Pure-Rust PDF renderer for slide decks. Already built as part of typst;
+# the default features add the standard PDF fonts, so no system fonts are needed.
+hayro = "0.7.1"
 
 [dev-dependencies]
 tempfile = "3"
