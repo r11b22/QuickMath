@@ -1,16 +1,18 @@
-//! Top-level app state: settings, theme, and which screen is showing.
+//! Top-level app state: settings, theme, spell checker, and which screen is showing.
 
 use std::path::{Path, PathBuf};
 
 use qm_core::AppSettings;
 use qm_render::Theme;
 
+use crate::editor::EditorAction;
 use crate::practice::{PracticeAction, PracticeScreen};
+use crate::spelling::Spelling;
 use crate::theme_style;
 use crate::toasts::Toasts;
-use crate::toolbar::ToolbarAction;
+use crate::toolbar::{SpellingMenu, ToolbarAction};
 use crate::welcome::{self, WelcomeAction, WelcomeScreen};
-use crate::workspace::{FrameContext, Workspace};
+use crate::workspace::{FrameContext, Workspace, WorkspaceAction};
 
 enum Screen {
     Welcome(WelcomeScreen),
@@ -20,6 +22,7 @@ enum Screen {
 pub struct QuickMathApp {
     settings: AppSettings,
     theme: Theme,
+    spelling: Spelling,
     screen: Screen,
     /// The practice game, shown instead of `screen` while open.
     practice: Option<Box<PracticeScreen>>,
@@ -38,12 +41,15 @@ impl QuickMathApp {
 
         let settings = AppSettings::load();
         theme_style::apply_theme(ctx, settings.dark_mode);
+        let mut toasts = Toasts::default();
+        let spelling = Spelling::start(&settings.spelling_languages, &mut toasts);
         let mut app = QuickMathApp {
             theme: theme_style::palette(settings.dark_mode),
             settings,
+            spelling,
             screen: Screen::Welcome(WelcomeScreen::default()),
             practice: None,
-            toasts: Toasts::default(),
+            toasts,
             window_title: String::new(),
             is_close_forced: false,
         };
@@ -105,6 +111,22 @@ impl QuickMathApp {
         self.save_settings();
     }
 
+    fn toggle_spelling_language(&mut self, code: &str) {
+        self.settings.toggle_spelling_language(code);
+        self.spelling
+            .use_languages(&self.settings.spelling_languages, &mut self.toasts);
+        self.save_settings();
+    }
+
+    fn handle_workspace_action(&mut self, ctx: &egui::Context, action: WorkspaceAction) {
+        match action {
+            WorkspaceAction::Toolbar(action) => self.handle_toolbar_action(ctx, action),
+            WorkspaceAction::Editor(EditorAction::AddToDictionary(word)) => {
+                self.spelling.add_word(&word, &mut self.toasts)
+            }
+        }
+    }
+
     fn handle_toolbar_action(&mut self, ctx: &egui::Context, action: ToolbarAction) {
         match action {
             ToolbarAction::OpenProject => self.pick_and_open_project(),
@@ -122,6 +144,7 @@ impl QuickMathApp {
             }
             ToolbarAction::ToggleTheme => self.toggle_theme(ctx),
             ToolbarAction::OpenPractice => self.open_practice(),
+            ToolbarAction::ToggleSpellingLanguage(code) => self.toggle_spelling_language(&code),
             ToolbarAction::Quit => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
             // Handled inside the workspace.
             ToolbarAction::Save
@@ -208,9 +231,14 @@ impl QuickMathApp {
                 let frame = FrameContext {
                     theme: &self.theme,
                     recent_projects: &recent_projects,
+                    spell_check: self.spelling.current(),
+                    spelling_menu: SpellingMenu {
+                        available: self.spelling.available(),
+                        enabled: &self.settings.spelling_languages,
+                    },
                 };
                 if let Some(action) = workspace.show(ui, &frame, &mut self.toasts) {
-                    self.handle_toolbar_action(ui.ctx(), action);
+                    self.handle_workspace_action(ui.ctx(), action);
                 }
             }
             Screen::Welcome(welcome) => {
@@ -231,6 +259,7 @@ impl QuickMathApp {
 
 impl eframe::App for QuickMathApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        self.spelling.poll(ui.ctx(), &mut self.toasts);
         self.show_screen(ui);
         self.toasts.show(ui.ctx(), &self.theme);
         self.update_window_title(ui.ctx());

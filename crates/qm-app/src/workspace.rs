@@ -7,7 +7,7 @@ use egui::{Key, KeyboardShortcut, Modifiers, RichText};
 use qm_core::{FileNode, Project, WorkspaceState};
 use qm_render::Theme;
 
-use crate::editor::EditorView;
+use crate::editor::{EditorAction, EditorView};
 use crate::export_dialog::{ExportDialog, ExportOutcome, ExportSource};
 use crate::file_tree::{self, FileTreeAction, FileTreeState};
 use crate::help_panel::HelpPanel;
@@ -15,9 +15,10 @@ use crate::note::OpenNote;
 use crate::outline;
 use crate::preview_pane::{self, PreviewSync};
 use crate::prompts::{self, Prompt, PromptOutcome};
+use crate::spelling::SpellCheck;
 use crate::status_bar;
 use crate::toasts::Toasts;
-use crate::toolbar::{self, ToolbarAction, ToolbarModel, ViewMode};
+use crate::toolbar::{self, SpellingMenu, ToolbarAction, ToolbarModel, ViewMode};
 
 const SAVE_SHORTCUT: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key::S);
 const SIDEBAR_DEFAULT_WIDTH: f32 = 250.0;
@@ -37,6 +38,17 @@ struct PaneLayout {
 pub struct FrameContext<'a> {
     pub theme: &'a Theme,
     pub recent_projects: &'a [PathBuf],
+    /// `None` while spell checking is off or its dictionaries are loading.
+    pub spell_check: Option<SpellCheck<'a>>,
+    pub spelling_menu: SpellingMenu<'a>,
+}
+
+/// What the workspace passes up because only the app can handle it.
+#[derive(Debug, Clone, PartialEq)]
+pub enum WorkspaceAction {
+    /// Theme, switching projects, quitting, spelling languages.
+    Toolbar(ToolbarAction),
+    Editor(EditorAction),
 }
 
 pub struct Workspace {
@@ -97,27 +109,28 @@ impl Workspace {
         is_saved
     }
 
-    /// Draws the whole workspace. Returns toolbar actions that concern the app
-    /// (theme, switching projects, quitting).
+    /// Draws the whole workspace. Returns the actions that concern the app.
     pub fn show(
         &mut self,
         ui: &mut egui::Ui,
         frame: &FrameContext,
         toasts: &mut Toasts,
-    ) -> Option<ToolbarAction> {
+    ) -> Option<WorkspaceAction> {
         if ui.input_mut(|input| input.consume_shortcut(&SAVE_SHORTCUT)) {
             self.save_note(toasts);
         }
-        let app_action = self
+        let toolbar_action = self
             .show_toolbar(ui, frame)
             .and_then(|action| self.handle_toolbar_action(action, toasts));
         self.show_status_bar(ui, frame.theme);
         self.show_sidebar(ui, frame.theme, toasts);
         self.show_help_panel(ui, frame.theme);
-        self.show_centre(ui, frame.theme, toasts);
+        let editor_action = self.show_centre(ui, frame, toasts);
         self.show_dialogs(ui.ctx(), frame.theme, toasts);
         self.autosave(ui.ctx(), toasts);
-        app_action
+        toolbar_action
+            .map(WorkspaceAction::Toolbar)
+            .or(editor_action.map(WorkspaceAction::Editor))
     }
 
     fn show_toolbar(&mut self, ui: &mut egui::Ui, frame: &FrameContext) -> Option<ToolbarAction> {
@@ -134,6 +147,7 @@ impl Workspace {
                     recent_projects: frame.recent_projects,
                     view_mode: &mut self.layout.view_mode,
                     is_help_open: self.layout.is_help_open,
+                    spelling: frame.spelling_menu,
                 };
                 toolbar::show_toolbar(ui, model, theme)
             })
@@ -286,7 +300,14 @@ impl Workspace {
         }
     }
 
-    fn show_centre(&mut self, ui: &mut egui::Ui, theme: &Theme, toasts: &mut Toasts) {
+    fn show_centre(
+        &mut self,
+        ui: &mut egui::Ui,
+        frame: &FrameContext,
+        toasts: &mut Toasts,
+    ) -> Option<EditorAction> {
+        let theme = frame.theme;
+        let spell_check = frame.spell_check;
         let Some(note) = &mut self.note else {
             egui::CentralPanel::default()
                 .frame(egui::Frame::new().fill(theme.background))
@@ -299,16 +320,19 @@ impl Workspace {
                         });
                     }
                 });
-            return;
+            return None;
         };
         let editor_frame = egui::Frame::new().fill(theme.background);
         let preview_frame = egui::Frame::new().fill(theme.surface);
         let mut clicked_wikilink = None;
+        let mut editor_action = None;
         match self.layout.view_mode {
             ViewMode::EditorOnly => {
                 egui::CentralPanel::default()
                     .frame(editor_frame)
-                    .show(ui, |ui| self.editor.show(ui, note, theme));
+                    .show(ui, |ui| {
+                        editor_action = self.editor.show(ui, note, theme, spell_check);
+                    });
             }
             ViewMode::PreviewOnly => {
                 egui::CentralPanel::default()
@@ -325,7 +349,9 @@ impl Workspace {
                     .resizable(true)
                     .default_size(width / 2.0)
                     .size_range(MIN_PANE_WIDTH..=(width - MIN_PANE_WIDTH).max(MIN_PANE_WIDTH))
-                    .show(ui, |ui| self.editor.show(ui, note, theme));
+                    .show(ui, |ui| {
+                        editor_action = self.editor.show(ui, note, theme, spell_check);
+                    });
                 egui::CentralPanel::default()
                     .frame(preview_frame)
                     .show(ui, |ui| {
@@ -337,6 +363,7 @@ impl Workspace {
         if let Some(target) = clicked_wikilink {
             self.follow_wikilink(&target, toasts);
         }
+        editor_action
     }
 
     fn show_dialogs(&mut self, ctx: &egui::Context, theme: &Theme, toasts: &mut Toasts) {

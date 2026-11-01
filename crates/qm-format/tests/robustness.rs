@@ -4,7 +4,8 @@
 use std::time::{Duration, Instant};
 
 use qm_format::{
-    display_math_to_latex, highlight, math_to_latex, parse_document, parse_math, BlockKind,
+    display_math_to_latex, highlight, math_to_latex, parse_document, parse_math, spell_check_words,
+    BlockKind,
 };
 
 /// Deterministic pseudo-random generator (no external crates, reproducible).
@@ -45,6 +46,9 @@ fn exercise(source: &str) {
     let spans = highlight(source);
     let covered: usize = spans.iter().map(|span| span.range.len()).sum();
     assert_eq!(covered, source.len(), "highlight coverage for {source:?}");
+    for word in spell_check_words(source) {
+        assert!(source.get(word).is_some(), "word range in {source:?}");
+    }
 }
 
 #[test]
@@ -99,6 +103,7 @@ fn large_note_parses_quickly() {
     let started = Instant::now();
     parse_document(&big);
     highlight(&big);
+    spell_check_words(&big);
     // Generous bound so the debug-mode test is not flaky; release is far faster.
     assert!(
         started.elapsed() < Duration::from_secs(2),

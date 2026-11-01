@@ -15,9 +15,11 @@ pub const MAX_RECENT_PROJECTS: usize = 10;
 /// Folder in the OS config directory that holds all app-wide files.
 pub(crate) const SETTINGS_DIR_NAME: &str = "quickmath";
 const SETTINGS_FILE_NAME: &str = "settings.json";
+/// Spell checking language for new installs, by [`crate::Language`] code.
+const DEFAULT_SPELLING_LANGUAGE: &str = "en_US";
 
 /// App-wide settings stored in the user's config directory.
-#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct AppSettings {
     /// Most recent first, without duplicates.
@@ -26,6 +28,20 @@ pub struct AppSettings {
     /// Project that was open when the app quit, reopened on the next start.
     /// `None` after the user explicitly closes the project.
     pub open_project: Option<PathBuf>,
+    /// [`crate::Language`] codes spell checking uses, all at once. Empty
+    /// turns spell checking off.
+    pub spelling_languages: Vec<String>,
+}
+
+impl Default for AppSettings {
+    fn default() -> AppSettings {
+        AppSettings {
+            recent_projects: Vec::new(),
+            dark_mode: false,
+            open_project: None,
+            spelling_languages: vec![DEFAULT_SPELLING_LANGUAGE.to_string()],
+        }
+    }
 }
 
 impl AppSettings {
@@ -53,6 +69,19 @@ impl AppSettings {
         self.recent_projects.retain(|path| path != root);
         self.recent_projects.insert(0, root.to_path_buf());
         self.recent_projects.truncate(MAX_RECENT_PROJECTS);
+    }
+
+    /// Turns spell checking in the language with `code` on, or off if it was on.
+    pub fn toggle_spelling_language(&mut self, code: &str) {
+        if let Some(index) = self
+            .spelling_languages
+            .iter()
+            .position(|known| known == code)
+        {
+            self.spelling_languages.remove(index);
+        } else {
+            self.spelling_languages.push(code.to_string());
+        }
     }
 
     /// Where [`AppSettings::load`] and [`AppSettings::save`] keep the
@@ -158,5 +187,29 @@ mod tests {
 
         assert_eq!(settings.recent_projects, [PathBuf::from("/a"), "/b".into()]);
         assert!(!settings.dark_mode);
+        assert_eq!(settings.spelling_languages, [DEFAULT_SPELLING_LANGUAGE]);
+    }
+
+    #[test]
+    fn toggle_spelling_language_adds_and_removes_it() {
+        let mut settings = AppSettings::default();
+        settings.toggle_spelling_language("nl_NL");
+        assert_eq!(settings.spelling_languages, ["en_US", "nl_NL"]);
+        settings.toggle_spelling_language("en_US");
+        assert_eq!(settings.spelling_languages, ["nl_NL"]);
+    }
+
+    #[test]
+    fn spelling_can_be_turned_off_for_good() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(SETTINGS_FILE_NAME);
+        let settings = AppSettings {
+            spelling_languages: Vec::new(),
+            ..AppSettings::default()
+        };
+
+        settings.save_to(&path).unwrap();
+
+        assert!(AppSettings::load_from(&path).spelling_languages.is_empty());
     }
 }

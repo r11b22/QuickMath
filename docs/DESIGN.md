@@ -48,8 +48,8 @@ The project is a Cargo workspace with four crates under `crates/`.
   LaTeX conversion of math, syntax highlighting, cheat sheet. Pure functions
   on strings. No I/O, no GUI.
 - **qm-core**: the backend. Projects (folders of notes), file operations,
-  settings, practice progress and all exporters (Obsidian Markdown, LaTeX,
-  PDF).
+  settings, practice progress, spell checking and all exporters (Obsidian
+  Markdown, LaTeX, PDF).
 - **qm-render**: draws a parsed document or a single formula inside egui. Its
   own math typesetter and paragraph layout, plus the colour theme.
 - **qm-app**: the desktop program (binary `quick-math`). Screens, panes,
@@ -60,7 +60,8 @@ The project is a Cargo workspace with four crates under `crates/`.
 - qm-format depends on nothing at runtime. It uses `toml` only in its build
   script and tests.
 - qm-core depends on qm-format, plus typst (PDF), serde/serde_json (settings
-  files) and dirs (config directory).
+  files), dirs (config directory) and spellbook (Hunspell-compatible spell
+  checking).
 - qm-render depends on qm-format and egui, plus typst-assets for fonts.
 - qm-app depends on all three, plus eframe and rfd (native file dialogs).
 - qm-core and qm-render do not depend on each other.
@@ -84,8 +85,8 @@ The code follows model–view–controller, adapted to egui's immediate mode.
 
 - **Model**: the data and the rules for changing it, with no drawing code.
   This is qm-format and qm-core, plus the app's own state types: `OpenNote`,
-  the practice `Session` and `curriculum.rs`, and the pure helpers
-  (`text_metrics.rs`, `autosave.rs`).
+  `Spelling`, the practice `Session` and `curriculum.rs`, and the pure
+  helpers (`text_metrics.rs`, `autosave.rs`).
 - **View**: code that draws. This is qm-render, plus the `show` function of
   each pane and screen in qm-app. A view reads the model and returns what
   the user did as an action enum (see 7.2). It does not change the model.
@@ -109,8 +110,9 @@ The code follows model–view–controller, adapted to egui's immediate mode.
 
 1. `main.rs` creates the eframe window and `QuickMathApp`.
 2. `QuickMathApp::new` installs the renderer's fonts, loads `AppSettings`,
-   applies the light or dark theme, and reopens the project that was open
-   when the app last quit (if it still exists).
+   applies the light or dark theme, starts loading the spelling
+   dictionaries on a background thread, and reopens the project that was
+   open when the app last quit (if it still exists).
 
 ### 3.2 Typing in a note (every keystroke)
 
@@ -125,7 +127,11 @@ The code follows model–view–controller, adapted to egui's immediate mode.
 5. When the cursor ends a partly typed math word, `qm_format::math_completions`
    suggests words from the syntax file and the editor lists them under the
    cursor (`completion_popup.rs`).
-6. After one second without edits the note is saved (`autosave.rs`).
+6. `qm_format::spell_check_words` picks out the prose words, the spell
+   checker rejects some, and the editor draws a wavy line under those
+   (`misspellings.rs`). The word at the cursor is skipped, so a word being
+   typed is not flagged until it is finished.
+7. After one second without edits the note is saved (`autosave.rs`).
 
 ### 3.3 Saving
 
@@ -171,6 +177,8 @@ Everything other crates use is re-exported from `lib.rs`:
 - `vocabulary()`: every keyword and operator from the syntax file, by section.
 - `math_completions(source, cursor) -> Option<MathCompletions>`: syntax-file
   words for the math word ending at the cursor, best first.
+- `spell_check_words(source) -> Vec<Range<usize>>`: the prose words spell
+  checking looks at.
 - All syntax tree types from `ast.rs`.
 
 ### 4.2 Rules
@@ -187,6 +195,10 @@ Everything other crates use is re-exported from `lib.rs`:
 - Highlight spans cover every byte of the source, without gaps or overlaps.
 - Completion uses the highlighter to decide whether the cursor is in math, so
   words are suggested exactly where the parser reads them as math.
+- Spell checking also uses the highlighter: only text, heading, emphasis and
+  strong spans are prose. Single letters, words with digits or `_`,
+  abbreviations in capitals and web addresses are skipped, because in math
+  notes they are nearly always variables or names, not misspellings.
 - Completion ranks prefix matches first, then letters-in-order matches (from
   three typed letters), then the shortest spelling. Aliases of one symbol
   (`eps`, `epsilon`) are listed once, under the best-ranked spelling.
@@ -262,6 +274,8 @@ Done in stages, each in its own module:
 - `WorkspaceState`: per-project UI state.
 - `AppSettings`: app-wide settings.
 - `PracticeProgress`, `LevelRecord`: practice game results.
+- `Language`, `Dictionary`, `SpellChecker`, `WordList`: spell checking (see
+  5.5).
 - `ExportFormat`, `export_note`, `export_project`, and the string renderers in
   `export::{latex, obsidian, pdf}`.
 - `CoreError` and `Result`.
@@ -288,8 +302,12 @@ Done in stages, each in its own module:
   Paths are stored relative to the root with `/` separators, so a project can
   be moved or synced between machines.
 - Settings: `quickmath/settings.json` in the OS config directory (recent
-  projects, dark mode, project open at quit).
+  projects, dark mode, project open at quit, spelling languages).
 - Practice progress: `quickmath/practice.json` next to the settings.
+- Personal word list: `quickmath/words.txt` next to the settings, one word
+  per line.
+- Extra spelling dictionaries: `quickmath/dictionaries/<code>.aff` and
+  `<code>.dic` next to the settings.
 - All writes are atomic (`fs_util::write_atomically`).
 - Missing or unreadable settings and progress files fall back to defaults
   instead of failing.
@@ -316,10 +334,31 @@ Done in stages, each in its own module:
 - `export/fixtures.rs` holds hand-built documents covering every syntax tree
   variant, for exporter tests.
 
-### 5.5 Errors
+### 5.5 Spell checking
+
+- Dictionaries are Hunspell `.aff`/`.dic` pairs, checked with the spellbook
+  crate (pure Rust, so no C library is needed).
+- English (`en_US`) and Dutch (`nl_NL`) are compiled in from
+  `qm-core/dictionaries/`, which also records their source and licences.
+- `Language::available` adds every pair found in the user's dictionary
+  folder and the Linux system folders (`/usr/share/hunspell`,
+  `/usr/share/myspell`). Files win over a built-in dictionary with the same
+  code.
+- Any number of languages can be on at once. A word is correct when any of
+  them accepts it, so notes that mix languages need no switching.
+  Suggestions take turns between the languages.
+- Settings store the codes of the languages that are on. An empty list turns
+  spell checking off; new installs start with `en_US`.
+- Words in the personal word list are added to every loaded dictionary, so
+  they follow Hunspell's casing rules (`eigenbasis` also accepts
+  `Eigenbasis`).
+- Dictionary files must be UTF-8. A dictionary that fails to load is
+  reported and left out; the other languages keep working.
+
+### 5.6 Errors
 
 - One error type, `CoreError`: I/O (always with the path), invalid name,
-  already exists, outside project, export failure.
+  already exists, outside project, export failure, dictionary failure.
 - Messages are meant to be shown to the user as they are.
 
 ---
@@ -381,8 +420,8 @@ Done in stages, each in its own module:
 
 ### 7.1 Structure
 
-- `app.rs` (`QuickMathApp`): top-level state. Owns settings, theme, toasts
-  and the current screen: the welcome screen or a workspace. The practice
+- `app.rs` (`QuickMathApp`): top-level state. Owns settings, theme, the
+  spell checker, toasts and the current screen: the welcome screen or a workspace. The practice
   game is shown on top of either while open.
 - `welcome.rs`: shown when no project is open. Open, create or reopen a
   project, or start practice.
@@ -391,8 +430,11 @@ Done in stages, each in its own module:
   ties them together.
 - `note.rs` (`OpenNote`): the open note's text, parsed document, dirty flag,
   autosave timer and cursor position.
+- `spelling.rs` (`Spelling`): the available languages, the personal word
+  list and the loaded spell checker. Dictionaries load on a background
+  thread, polled each frame.
 - One module per pane or widget: `toolbar.rs`, `file_tree.rs`, `outline.rs`,
-  `editor.rs`, `completion_popup.rs`, `preview_pane.rs`, `status_bar.rs`,
+  `editor.rs`, `completion_popup.rs`, `misspellings.rs`, `preview_pane.rs`, `status_bar.rs`,
   `help_panel.rs`, `export_dialog.rs`, `prompts.rs` (small modals),
   `toasts.rs` (notifications).
 - Pure helpers with no egui state: `text_metrics.rs` (cursor positions, word
@@ -408,15 +450,16 @@ Done in stages, each in its own module:
 - Widgets do not change app state directly. Each `show_*` function returns an
   action enum (`ToolbarAction`, `FileTreeAction`, `WelcomeAction`,
   `PromptOutcome`, `PracticeAction`, …) and its owner handles it.
-- Actions that only the app can handle (switching projects, theme, quit)
-  are passed up from the workspace to `QuickMathApp`.
+- Actions that only the app can handle (switching projects, theme, quit,
+  spelling languages, adding a word to the word list) are passed up from the
+  workspace to `QuickMathApp` as a `WorkspaceAction`.
 - Requests to the editor that need its widget state (jump to line, insert
   text) are queued in `OpenNote::requests` and applied on its next frame.
 - The preview only scrolls when the editor cursor moves to another line, or
   on an explicit request (e.g. from the outline), so the user can scroll it
   freely otherwise.
-- Long-running work (exports) runs on a background thread and is polled each
-  frame.
+- Long-running work (exports, loading dictionaries) runs on a background
+  thread and is polled each frame.
 
 ### 7.3 Layout
 
@@ -425,6 +468,11 @@ Done in stages, each in its own module:
 - Centre: editor, preview, or both side by side (`ViewMode`).
 - Right: help drawer with the cheat sheet, every symbol from the syntax file
   (click to insert) and keyboard shortcuts.
+- Misspelled words get a wavy underline in the error colour. Right-clicking
+  one opens a menu with corrections and "Add to dictionary". Suggestions are
+  only computed then, because they take tens of milliseconds per language.
+- Spelling languages are switched on and off in the ☰ menu under "Spell
+  check".
 - Math suggestions float under the word being typed. Only Tab accepts one;
   Up/Down choose and Escape hides them. Enter and Space keep their normal
   meaning, so typing on never picks a suggestion by accident.
@@ -453,12 +501,13 @@ Done in stages, each in its own module:
   public API. Unit tests live next to the code in `#[cfg(test)]` modules.
 - qm-format: document structure (`document.rs`), math behaviour checked
   mostly through LaTeX output (`math.rs`), highlighting (`highlight.rs`),
-  completion (`completion.rs`),
-  robustness on bad input (`robustness.rs`), the syntax file generator
+  completion (`completion.rs`), which words are spell checked
+  (`spelling.rs`), robustness on bad input (`robustness.rs`), the syntax file generator
   (`syntax_file.rs`).
 - qm-core: project operations and exports against real temporary folders
-  (`project.rs`, `export.rs`), and exporting real parser output
-  (`parsed_notes.rs`).
+  (`project.rs`, `export.rs`), exporting real parser output
+  (`parsed_notes.rs`), and finding languages and checking words with small
+  test dictionaries and the built-in ones (`spelling.rs`).
 - qm-render: layout metrics and cache behaviour with real fonts in a
   headless egui context (`math/tests.rs`, `document/tests.rs`).
 - qm-app: unit tests inside most modules, covering the pure helpers, the

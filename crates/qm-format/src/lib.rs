@@ -13,6 +13,7 @@ mod inline;
 mod line_syntax;
 mod lines;
 mod math;
+mod spelling;
 
 pub use ast::*;
 
@@ -122,6 +123,18 @@ pub struct MathCompletion {
 /// character.
 pub fn math_completions(source: &str, cursor: usize) -> Option<MathCompletions> {
     completion::math_completions(source, cursor)
+}
+
+/// Byte ranges of the words in `source` that spell checking should look at:
+/// prose in paragraphs, headings, lists, quotes and callout titles, in
+/// source order.
+///
+/// Math, code, wikilinks, front matter and markup are never included, and
+/// neither are single letters, words with digits or `_` (`x2`, `f_n`),
+/// abbreviations in capitals (`PDE`) and web addresses. Inner apostrophes
+/// and hyphens stay part of a word (`don't`, `well-known`).
+pub fn spell_check_words(source: &str) -> Vec<std::ops::Range<usize>> {
+    spelling::spell_check_words(source)
 }
 
 /// Syntax-highlighting category for a byte range of the source.

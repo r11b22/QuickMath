@@ -11,6 +11,11 @@ pub enum CoreError {
     AlreadyExists(PathBuf),
     OutsideProject(PathBuf),
     Export(String),
+    /// A spelling dictionary could not be loaded.
+    Dictionary {
+        language: String,
+        message: String,
+    },
 }
 
 impl CoreError {
@@ -33,6 +38,9 @@ impl fmt::Display for CoreError {
                 write!(f, "{} is outside the project", path.display())
             }
             CoreError::Export(message) => write!(f, "export failed: {message}"),
+            CoreError::Dictionary { language, message } => {
+                write!(f, "{language} dictionary: {message}")
+            }
         }
     }
 }

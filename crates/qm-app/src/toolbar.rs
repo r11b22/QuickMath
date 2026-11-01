@@ -3,6 +3,7 @@
 use std::path::PathBuf;
 
 use egui::{Align, Layout, RichText};
+use qm_core::Language;
 use qm_render::Theme;
 
 /// How the centre area is split between the editor and the preview.
@@ -32,6 +33,8 @@ pub enum ToolbarAction {
     ToggleHelp,
     OpenExport,
     OpenPractice,
+    /// Turn spell checking in the language with this code on or off.
+    ToggleSpellingLanguage(String),
     Quit,
 }
 
@@ -41,6 +44,15 @@ pub struct ToolbarModel<'a> {
     pub recent_projects: &'a [PathBuf],
     pub view_mode: &'a mut ViewMode,
     pub is_help_open: bool,
+    pub spelling: SpellingMenu<'a>,
+}
+
+/// What the spell check menu offers and which languages are on.
+#[derive(Clone, Copy)]
+pub struct SpellingMenu<'a> {
+    pub available: &'a [Language],
+    /// Codes of the languages that are on.
+    pub enabled: &'a [String],
 }
 
 pub fn show_toolbar(
@@ -50,7 +62,7 @@ pub fn show_toolbar(
 ) -> Option<ToolbarAction> {
     let mut action = None;
     ui.horizontal_centered(|ui| {
-        app_menu(ui, model.recent_projects, &mut action);
+        app_menu(ui, &model, &mut action);
         if ui.button("◧").on_hover_text("Toggle sidebar").clicked() {
             action = Some(ToolbarAction::ToggleSidebar);
         }
@@ -90,7 +102,7 @@ pub fn show_toolbar(
     action
 }
 
-fn app_menu(ui: &mut egui::Ui, recent_projects: &[PathBuf], action: &mut Option<ToolbarAction>) {
+fn app_menu(ui: &mut egui::Ui, model: &ToolbarModel, action: &mut Option<ToolbarAction>) {
     ui.menu_button("☰", |ui| {
         menu_item(ui, "Save   (Ctrl+S)", ToolbarAction::Save, action);
         ui.separator();
@@ -102,10 +114,10 @@ fn app_menu(ui: &mut egui::Ui, recent_projects: &[PathBuf], action: &mut Option<
         );
         menu_item(ui, "New project…", ToolbarAction::NewProject, action);
         ui.menu_button("Recent projects", |ui| {
-            if recent_projects.is_empty() {
+            if model.recent_projects.is_empty() {
                 ui.label("No recent projects");
             }
-            for root in recent_projects {
+            for root in model.recent_projects {
                 if ui.button(root.display().to_string()).clicked() {
                     *action = Some(ToolbarAction::OpenRecent(root.clone()));
                 }
@@ -113,6 +125,9 @@ fn app_menu(ui: &mut egui::Ui, recent_projects: &[PathBuf], action: &mut Option<
         });
         menu_item(ui, "Close project", ToolbarAction::CloseProject, action);
         ui.separator();
+        ui.menu_button("Spell check", |ui| {
+            spelling_menu(ui, model.spelling, action)
+        });
         menu_item(
             ui,
             "Practice notation…",
@@ -122,6 +137,28 @@ fn app_menu(ui: &mut egui::Ui, recent_projects: &[PathBuf], action: &mut Option<
         ui.separator();
         menu_item(ui, "Quit", ToolbarAction::Quit, action);
     });
+}
+
+/// One checkbox per language; several can be on at once.
+fn spelling_menu(ui: &mut egui::Ui, menu: SpellingMenu, action: &mut Option<ToolbarAction>) {
+    for language in menu.available {
+        let code = language.code();
+        let mut is_on = menu.enabled.iter().any(|enabled| enabled == code);
+        if ui.checkbox(&mut is_on, code).clicked() {
+            *action = Some(ToolbarAction::ToggleSpellingLanguage(code.to_string()));
+        }
+    }
+    if let Some(folder) = Language::user_folder() {
+        ui.separator();
+        ui.label(
+            RichText::new(format!(
+                "More languages: add Hunspell .aff and .dic files to {} and restart.",
+                folder.display()
+            ))
+            .small()
+            .weak(),
+        );
+    }
 }
 
 fn menu_item(

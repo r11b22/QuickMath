@@ -1,5 +1,5 @@
 //! The source editor: a highlighted, monospace `TextEdit` with a line-number
-//! gutter and suggestions for math words.
+//! gutter, suggestions for math words and underlined misspellings.
 
 use egui::text::{CCursor, CCursorRange};
 use egui::widgets::text_edit::{TextEditOutput, TextEditState};
@@ -8,7 +8,9 @@ use qm_render::Theme;
 
 use crate::completion_popup::CompletionPopup;
 use crate::highlight::HighlightCache;
+use crate::misspellings::{MisspellingChoice, Misspellings};
 use crate::note::OpenNote;
+use crate::spelling::SpellCheck;
 use crate::text_metrics;
 
 const EDITOR_FONT_SIZE: f32 = 14.0;
@@ -19,11 +21,19 @@ const TEXT_MARGIN_RIGHT: i8 = 16;
 const TEXT_MARGIN_VERTICAL: i8 = 12;
 const MIN_GUTTER_DIGITS: usize = 2;
 
+/// What the user asked for in the editor that the editor cannot do itself.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum EditorAction {
+    /// Accept this word in every language from now on.
+    AddToDictionary(String),
+}
+
 /// Editor widget state that outlives a single frame.
 #[derive(Default)]
 pub struct EditorView {
     highlight: HighlightCache,
     completion: CompletionPopup,
+    misspellings: Misspellings,
 }
 
 /// The editor's widget id. Salted with the note path so every note gets its
@@ -34,7 +44,14 @@ fn editor_id(note: &OpenNote) -> Id {
 
 impl EditorView {
     /// Draws the editor filling `ui` and applies any pending [`crate::note::EditorRequests`].
-    pub fn show(&mut self, ui: &mut egui::Ui, note: &mut OpenNote, theme: &Theme) {
+    /// Misspelled words are underlined while `spell_check` is given.
+    pub fn show(
+        &mut self,
+        ui: &mut egui::Ui,
+        note: &mut OpenNote,
+        theme: &Theme,
+        spell_check: Option<SpellCheck>,
+    ) -> Option<EditorAction> {
         let id = editor_id(note);
         let now = ui.input(|input| input.time);
         let font_id = FontId::monospace(EDITOR_FONT_SIZE);
@@ -59,6 +76,9 @@ impl EditorView {
                 let output =
                     self.show_text_edit(ui, id, &mut note.text, theme, &font_id, gutter.width);
                 gutter.paint(ui, &output, theme, &font_id);
+                self.misspellings.update(&note.text, spell_check);
+                let cursor = output.cursor_range.and_then(cursor_without_selection);
+                self.misspellings.paint(ui, &output, cursor, theme.error);
                 if let Some(line) = jump_to_line {
                     move_cursor_to_line(ui, id, &note.text, &output, line);
                 }
@@ -66,6 +86,20 @@ impl EditorView {
             });
         let output = scroll.inner;
 
+        let mut action = None;
+        match self.misspellings.show_menu(&output, spell_check, theme) {
+            Some(MisspellingChoice::Replace {
+                char_range,
+                replacement,
+            }) => {
+                replace_and_place_cursor(ui.ctx(), id, &mut note.text, char_range, &replacement);
+                is_edited = true;
+            }
+            Some(MisspellingChoice::AddToDictionary(word)) => {
+                action = Some(EditorAction::AddToDictionary(word));
+            }
+            None => {}
+        }
         if is_edited || output.response.response.changed() {
             note.mark_edited(now);
         }
@@ -81,6 +115,7 @@ impl EditorView {
             self.completion
                 .show(ui.ctx(), popup_id, &output, scroll.inner_rect, theme);
         }
+        action
     }
 
     /// Applies a suggestion accepted with Tab. Returns whether the text changed.
@@ -298,8 +333,8 @@ impl Gutter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use egui::{Event, RawInput};
-    use qm_core::Project;
+    use egui::{Event, PointerButton, RawInput};
+    use qm_core::{Language, Project, SpellChecker, WordList};
 
     /// Drives the real editor widget headlessly, one frame per call.
     struct Harness {
@@ -307,6 +342,8 @@ mod tests {
         editor: EditorView,
         note: OpenNote,
         folder: std::path::PathBuf,
+        spell_checker: Option<SpellChecker>,
+        last_action: Option<EditorAction>,
     }
 
     impl Harness {
@@ -327,8 +364,22 @@ mod tests {
                 editor: EditorView::default(),
                 note,
                 folder,
+                spell_checker: None,
+                last_action: None,
             };
             harness.frame(Vec::new());
+            harness
+        }
+
+        fn with_english(name: &str) -> Harness {
+            let english = Language::available_in(&[])
+                .into_iter()
+                .find(|language| language.code() == "en_US")
+                .expect("English is built in");
+            let (checker, _) =
+                SpellChecker::new(vec![english.load().unwrap()], &WordList::default());
+            let mut harness = Harness::new(name);
+            harness.spell_checker = Some(checker);
             harness
         }
 
@@ -343,9 +394,53 @@ mod tests {
             };
             let theme = Theme::light();
             let Harness {
-                ctx, editor, note, ..
+                ctx,
+                editor,
+                note,
+                spell_checker,
+                last_action,
+                ..
             } = self;
-            let _ = ctx.run_ui(input, |ui| editor.show(ui, note, &theme));
+            let spell_check = spell_checker.as_ref().map(|checker| SpellCheck {
+                checker,
+                revision: 0,
+            });
+            let _ = ctx.run_ui(input, |ui| {
+                *last_action = editor.show(ui, note, &theme, spell_check);
+            });
+        }
+
+        /// Where the middle of character `column` on the first line is drawn.
+        fn char_position(&self, column: usize) -> egui::Pos2 {
+            let font_id = FontId::monospace(EDITOR_FONT_SIZE);
+            let (glyph_width, row_height) = self
+                .ctx
+                .fonts_mut(|fonts| (fonts.glyph_width(&font_id, '0'), fonts.row_height(&font_id)));
+            let editor_rect = self
+                .ctx
+                .read_response(editor_id(&self.note))
+                .expect("editor was drawn")
+                .rect;
+            let gutter = MIN_GUTTER_DIGITS as f32 * glyph_width + 2.0 * GUTTER_PADDING;
+            let text_left = editor_rect.left() + (gutter + TEXT_MARGIN_LEFT).round();
+            let text_top = editor_rect.top() + f32::from(TEXT_MARGIN_VERTICAL);
+            egui::pos2(
+                text_left + (column as f32 + 0.5) * glyph_width,
+                text_top + row_height / 2.0,
+            )
+        }
+
+        fn right_click(&mut self, position: egui::Pos2) {
+            let button = |pressed| Event::PointerButton {
+                pos: position,
+                button: PointerButton::Secondary,
+                pressed,
+                modifiers: Modifiers::NONE,
+            };
+            self.frame(vec![Event::PointerMoved(position)]);
+            self.frame(vec![button(true)]);
+            self.frame(vec![button(false)]);
+            self.frame(Vec::new());
         }
 
         fn type_text(&mut self, text: &str) {
@@ -412,5 +507,36 @@ mod tests {
         harness.press(Key::Escape);
         harness.press(Key::Tab);
         assert_eq!(harness.note.text, "alp");
+    }
+
+    #[test]
+    fn right_click_on_a_misspelled_word_opens_corrections() {
+        let mut harness = Harness::with_english("menu-open");
+        harness.type_text("Teh end");
+
+        harness.right_click(harness.char_position(1));
+
+        assert!(egui::Popup::is_any_open(&harness.ctx));
+    }
+
+    #[test]
+    fn right_click_on_a_correct_word_opens_nothing() {
+        let mut harness = Harness::with_english("menu-closed");
+        harness.type_text("Teh end ");
+
+        harness.right_click(harness.char_position(5));
+
+        assert!(!egui::Popup::is_any_open(&harness.ctx));
+    }
+
+    #[test]
+    fn no_menu_without_spell_checking() {
+        let mut harness = Harness::new("menu-off");
+        harness.type_text("Teh end");
+
+        harness.right_click(harness.char_position(1));
+
+        assert!(!egui::Popup::is_any_open(&harness.ctx));
+        assert_eq!(harness.last_action, None);
     }
 }

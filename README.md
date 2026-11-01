@@ -38,6 +38,12 @@ cheat sheet, is in [docs/FORMAT.md](docs/FORMAT.md). A complete example note is
   Twelve levels unlock one by one, from operators to lecture-speed formulas,
   with stars for speed (WPM) and a 60-second sprint over everything unlocked.
   Progress is kept in `practice.json` next to the settings.
+- **Spell checking** in several languages at once (☰ → Spell check). English
+  and Dutch are built in; any Hunspell `.aff`/`.dic` pair in
+  `quickmath/dictionaries/` in the config directory (or installed system-wide
+  on Linux) adds another. Only prose is checked, never math or code.
+  Right-click an underlined word for corrections or to add it to your word
+  list (`words.txt` next to the settings).
 - Light and dark themes, autosave, syntax highlighting, notation help panel.
 
 ## Building
@@ -54,7 +60,7 @@ cargo test --workspace
 | Crate | Responsibility |
 |---|---|
 | `crates/qm-format` | The `.qm` notation: parser, syntax tree (`src/ast.rs`), math vocabulary (`src/math/syntax.toml`), LaTeX conversion, highlighting |
-| `crates/qm-core` | Projects, note storage, settings, Obsidian/LaTeX/PDF exporters |
+| `crates/qm-core` | Projects, note storage, settings, spell checking, Obsidian/LaTeX/PDF exporters |
 | `crates/qm-render` | Math typesetting and document preview on egui |
 | `crates/qm-app` | The eframe desktop app (binary `quick-math`) |
 

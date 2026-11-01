@@ -2,6 +2,9 @@
 
 Instructions for coding agents working in this repository. Read this file in full before making changes. When a rule here conflicts with an established convention in the existing codebase, **the codebase wins**. Match what's already there and flag the inconsistency instead of "fixing" it unasked.
 
+## Project Description
+You are an agent working on a project called QuickMath. An editor that lets users notate math lectures on their PC without having to learn to type fast LaTeX. QuickMath syntax is specifically built to never have to go back on yourself while typing so a QuickMath formula can be written from left to right.
+
 ---
 
 ## 0. Prime Directives
