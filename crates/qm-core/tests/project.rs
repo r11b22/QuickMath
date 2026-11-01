@@ -115,13 +115,16 @@ fn file_tree_does_not_follow_symlinked_folders() {
 // --- create_note / create_folder ----------------------------------------------------
 
 #[test]
-fn create_note_appends_extension_and_creates_empty_file() {
+fn create_note_appends_extension_and_starts_with_front_matter() {
     let (_dir, project) = new_project();
 
     let path = project.create_note(project.root(), "Lecture 1").unwrap();
 
     assert_eq!(path, project.root().join("Lecture 1.qm"));
-    assert_eq!(fs::read_to_string(&path).unwrap(), "");
+    let document = qm_format::parse_document(&fs::read_to_string(&path).unwrap());
+    assert_eq!(document.front_matter.title.as_deref(), Some("Lecture 1"));
+    assert!(document.front_matter.date.is_some());
+    assert!(document.blocks.is_empty());
     let kept = project.create_note(Path::new(""), "kept.qm").unwrap();
     assert_eq!(kept, project.root().join("kept.qm"));
 }

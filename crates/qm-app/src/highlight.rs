@@ -81,6 +81,10 @@ fn format_for(kind: TokenKind, theme: &Theme, font_id: &FontId) -> TextFormat {
             format.underline = Stroke::new(1.0, syntax.link);
         }
         TokenKind::FrontMatter => format.color = theme.text_faint,
+        TokenKind::FrontMatterEmptyField => {
+            format.color = theme.accent_text;
+            format.background = theme.accent_soft;
+        }
         TokenKind::Error => {
             format.color = theme.error;
             format.underline = Stroke::new(1.0, theme.error);

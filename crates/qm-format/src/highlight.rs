@@ -3,7 +3,7 @@
 
 use std::ops::Range;
 
-use crate::front_matter::front_matter_len;
+use crate::front_matter::{front_matter_len, is_empty_field};
 use crate::inline::highlight_inlines;
 use crate::line_syntax::{classify, is_code_fence_close, list_marker, LineStart, MATH_DELIMITER};
 use crate::lines::split_lines;
@@ -57,14 +57,20 @@ enum State {
 }
 
 pub(crate) fn highlight(source: &str) -> Vec<HighlightSpan> {
-    let front_matter_lines = front_matter_len(&split_lines(source)).unwrap_or(0);
+    let lines = split_lines(source);
+    let front_matter_lines = front_matter_len(&lines).unwrap_or(0);
     let mut sink = SpanSink::default();
     let mut state = State::Normal;
     let mut offset = 0;
     for (number, raw_line) in source.split('\n').enumerate() {
         let text = raw_line.strip_suffix('\r').unwrap_or(raw_line);
         if number < front_matter_lines {
-            sink.push(offset..offset + text.len(), TokenKind::FrontMatter);
+            let kind = if is_empty_field(&lines, number) {
+                TokenKind::FrontMatterEmptyField
+            } else {
+                TokenKind::FrontMatter
+            };
+            sink.push(offset..offset + text.len(), kind);
         } else {
             state = highlight_line(text, offset, state, &mut sink);
         }

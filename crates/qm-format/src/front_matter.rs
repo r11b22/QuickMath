@@ -42,6 +42,26 @@ fn key_value(text: &str) -> Option<(&str, &str)> {
     is_key.then(|| (key, value.trim()))
 }
 
+/// Whether line `index` of the front matter is a key still waiting for a
+/// value, such as `author:`. A `tags:` followed by `- item` lines is filled.
+pub(crate) fn is_empty_field(lines: &[Line], index: usize) -> bool {
+    let Some((_, value)) = lines.get(index).and_then(|line| key_value(line.text)) else {
+        return false;
+    };
+    let has_list_items = lines
+        .get(index + 1)
+        .is_some_and(|next| next.text.trim().starts_with("- "));
+    value.is_empty() && !has_list_items
+}
+
+/// The text a new note starts with: front matter with every recognised key,
+/// `title` and `date` filled in and the others left empty to fill in later.
+pub(crate) fn new_note_template(title: &str, date: &str) -> String {
+    // A line break would end the field and break the header.
+    let title = title.replace(['\r', '\n'], " ");
+    format!("{FENCE}\ntitle: {title}\nauthor:\ndate: {date}\ncourse:\ntags:\n{FENCE}\n")
+}
+
 /// Parses front matter; returns it with the number of lines it used.
 pub(crate) fn parse_front_matter(lines: &[Line]) -> (FrontMatter, usize) {
     let Some(length) = front_matter_len(lines) else {
@@ -131,6 +151,32 @@ mod tests {
             parse("---\ntags:\n  - a\n  - b\n---").0.tags,
             vec!["a", "b"]
         );
+    }
+
+    #[test]
+    fn new_note_template_is_front_matter_with_title_and_date() {
+        let template = new_note_template("Lecture 7: Groups", "2026-11-01");
+        let (front_matter, length) = parse(&template);
+        assert_eq!(length, 7);
+        assert_eq!(front_matter.title.as_deref(), Some("Lecture 7: Groups"));
+        assert_eq!(front_matter.date.as_deref(), Some("2026-11-01"));
+        assert_eq!(front_matter.author, None);
+        assert!(front_matter.tags.is_empty());
+    }
+
+    #[test]
+    fn new_note_template_keeps_title_on_one_line() {
+        let template = new_note_template("a\nb", "2026-11-01");
+        assert_eq!(parse(&template).0.title.as_deref(), Some("a b"));
+    }
+
+    #[test]
+    fn empty_fields_are_keys_without_value_or_list() {
+        let lines = split_lines("---\ntitle: T\nauthor:\ntags:\n  - a\ncourse: \n---");
+        let empty: Vec<usize> = (0..lines.len())
+            .filter(|&index| is_empty_field(&lines, index))
+            .collect();
+        assert_eq!(empty, vec![2, 5]);
     }
 
     #[test]

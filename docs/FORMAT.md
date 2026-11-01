@@ -42,6 +42,11 @@ would move.
   every line inside looks like `key: value`, a `- item`, or is blank. Anything
   else means the first `---` is just a horizontal rule.
 
+  New notes start with this header already in place: `title` is the note's
+  name, `date` is today, and `author`, `course` and `tags` are left empty. The
+  editor highlights a key without a value until you fill it in. If you don't
+  want a field, delete its line.
+
 Parsing never fails. While you type, every intermediate state still produces a
 sensible document. Half-finished math shows what it can, and only the part that
 truly cannot be read becomes an error node, shown verbatim.

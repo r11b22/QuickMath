@@ -203,6 +203,7 @@ Everything other crates use is re-exported from `lib.rs`:
 - `parse_math(source) -> MathList`: parses what goes between `;;`.
 - `math_to_latex`, `display_math_to_latex`: LaTeX math-mode source.
 - `highlight(source) -> Vec<HighlightSpan>`: spans for editor colouring.
+- `new_note_template(title, date)`: the front matter a new note starts with.
 - `cheat_sheet()`: examples for the help panel.
 - `vocabulary()`: every keyword and operator from the syntax file, by section.
 - `math_completions(source, cursor) -> Option<MathCompletions>`: syntax-file
@@ -223,6 +224,9 @@ Everything other crates use is re-exported from `lib.rs`:
   (`line_syntax.rs`) and math lexer, so highlighting always agrees with
   parsing.
 - Highlight spans cover every byte of the source, without gaps or overlaps.
+- A front matter key without a value (`author:`) gets its own span kind, so
+  the editor can make it stand out until it is filled in or its line is
+  deleted. Nothing records a dismissal; the file stays the only state.
 - Completion uses the highlighter to decide whether the cursor is in math, so
   words are suggested exactly where the parser reads them as math.
 - Spell checking also uses the highlighter: only text, heading, emphasis and
@@ -324,6 +328,9 @@ Done in stages, each in its own module:
   and refuses paths outside the root or inside `.quickmath/`
   (`CoreError::OutsideProject`).
 - Names for new notes, folders and renames are validated (`paths.rs`).
+- New notes start with `qm_format::new_note_template`, titled after the
+  note and dated today. The date is UTC (`clock.rs`), because the standard
+  library has no time zones.
 - Deleting moves the entry to `.quickmath/trash/`, adding a number if a file
   of that name is already there. Nothing is ever deleted for real.
 - Wikilinks (`[[Note name]]`) are resolved Obsidian-style against the file
@@ -512,6 +519,9 @@ Done in stages, each in its own module:
   default; toggled from the toolbar, the settings window or Ctrl+L.
 - Ctrl+Page Down and Ctrl+Page Up turn the slides while typing. They are
   taken before the editor draws, so the cursor never leaves the editor.
+- Front matter is drawn faint, except empty fields, which get the accent
+  colour on a soft accent background.
+- A newly created note opens with the cursor below its front matter.
 - Misspelled words get a wavy underline in the error colour. Right-clicking
   one opens a menu with corrections and "Add to dictionary". Suggestions are
   only computed then, because they take tens of milliseconds per language.

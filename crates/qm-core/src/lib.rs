@@ -3,6 +3,7 @@
 //!
 //! The GUI talks to the file system and exporters only through this crate.
 
+mod clock;
 mod error;
 pub mod export;
 mod fs_util;

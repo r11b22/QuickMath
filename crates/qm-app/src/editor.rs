@@ -353,6 +353,7 @@ mod tests {
             std::fs::create_dir_all(&folder).unwrap();
             let project = Project::open(&folder).unwrap();
             let path = project.create_note(&folder, "note").unwrap();
+            project.write_note(&path, "").unwrap();
             let note = OpenNote::load(&project, &path).unwrap();
             let ctx = egui::Context::default();
             let mut fonts = egui::FontDefinitions::default();

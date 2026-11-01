@@ -90,6 +90,26 @@ fn front_matter_and_code_regions() {
 }
 
 #[test]
+fn empty_front_matter_fields_stand_out_until_filled_in() {
+    let source = "---\ntitle: T\nauthor:\n---\nbody";
+    assert_eq!(kind_of(source, "title"), TokenKind::FrontMatter);
+    assert_eq!(kind_of(source, "author:"), TokenKind::FrontMatterEmptyField);
+
+    let filled = "---\ntitle: T\nauthor: Ada\n---\nbody";
+    assert_eq!(kind_of(filled, "author"), TokenKind::FrontMatter);
+}
+
+#[test]
+fn new_note_template_highlights_only_its_empty_fields() {
+    let source = qm_format::new_note_template("Groups", "2026-11-01");
+    assert_eq!(kind_of(&source, "title"), TokenKind::FrontMatter);
+    assert_eq!(kind_of(&source, "date"), TokenKind::FrontMatter);
+    for field in ["author:", "course:", "tags:"] {
+        assert_eq!(kind_of(&source, field), TokenKind::FrontMatterEmptyField);
+    }
+}
+
+#[test]
 fn unknown_backslash_command_is_an_error() {
     assert_eq!(kind_of(";;\\foo;;", "\\foo"), TokenKind::Error);
 }

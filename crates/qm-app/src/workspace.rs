@@ -677,8 +677,17 @@ impl Workspace {
             Ok(path) => {
                 self.refresh_tree(toasts);
                 self.open_note(&path, toasts);
+                self.move_cursor_below_front_matter();
             }
             Err(error) => toasts.error(format!("Could not create note: {error}")),
+        }
+    }
+
+    /// A new note is only its front matter, so its last line is the first
+    /// body line. Starting there means typing never lands in the header.
+    fn move_cursor_below_front_matter(&mut self) {
+        if let Some(note) = &mut self.note {
+            note.requests.jump_to_line = Some(note.text.split('\n').count() - 1);
         }
     }
 

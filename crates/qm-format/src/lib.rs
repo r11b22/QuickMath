@@ -32,6 +32,14 @@ pub fn parse_document(source: &str) -> Document {
     }
 }
 
+/// The text a new note starts with: a front matter header with `title` and
+/// `date` filled in and empty `author`, `course` and `tags` fields, so the
+/// header is visible and ready to fill in. Line breaks in `title` become
+/// spaces.
+pub fn new_note_template(title: &str, date: &str) -> String {
+    front_matter::new_note_template(title, date)
+}
+
 /// Parses a math expression as written between `;;` delimiters.
 pub fn parse_math(source: &str) -> MathList {
     math::parse_math(source)
@@ -156,6 +164,9 @@ pub enum TokenKind {
     CalloutMarker,
     WikiLink,
     FrontMatter,
+    /// A front matter key with no value yet (`author:`), shown highlighted
+    /// until it is filled in or its line is deleted.
+    FrontMatterEmptyField,
     Error,
 }
 

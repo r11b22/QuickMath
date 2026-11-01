@@ -8,6 +8,7 @@ mod workspace;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use crate::clock;
 use crate::fs_util::{create_dir_all, write_atomically};
 use crate::{CoreError, Result, SlideDeck, PROJECT_DIR_NAME};
 
@@ -65,7 +66,9 @@ impl Project {
         tree::scan_folder(&self.root)
     }
 
-    /// Creates an empty note `name` (`.qm` is appended if missing) in `folder`.
+    /// Creates the note `name` (`.qm` is appended if missing) in `folder`.
+    /// It starts with front matter titled after the note and dated today
+    /// (see [`qm_format::new_note_template`]).
     ///
     /// Fails with [`CoreError::InvalidName`] for empty, hidden or path-like
     /// names and with [`CoreError::AlreadyExists`] if the file exists.
@@ -73,11 +76,18 @@ impl Project {
         paths::validate_name(name)?;
         let folder = self.resolve_existing_folder(folder)?;
         let path = folder.join(paths::with_note_extension(name));
+        // Claim the name first, so an existing note is never overwritten.
         fs::OpenOptions::new()
             .write(true)
             .create_new(true)
             .open(&path)
             .map_err(|error| already_exists_or_io(&path, error))?;
+        let title = path
+            .file_stem()
+            .map(|stem| stem.to_string_lossy())
+            .unwrap_or_default();
+        let template = qm_format::new_note_template(&title, &clock::today());
+        write_atomically(&path, template.as_bytes())?;
         Ok(path)
     }
 
