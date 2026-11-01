@@ -1,15 +1,16 @@
 //! Splits math source into tokens. Whitespace is not a token; it is recorded
 //! on the following token because spacing decides grouping in QuickMath.
 
-use crate::math::symbols::{MULTI_CHAR_OPERATORS, SINGLE_CHAR_OPERATORS};
+use crate::math::symbols::{self, MULTI_CHAR_OPERATORS, SINGLE_CHAR_OPERATORS};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum TokenKind {
     /// Digits with an optional decimal part: `42`, `3.14`.
     Number,
-    /// A run of ASCII letters: `x`, `alpha`, `sqrt`.
+    /// A run of ASCII letters: `x`, `alpha`, `sqrt`. Digits right after the
+    /// letters belong to the word only if it is then a keyword (`integral2`).
     Word,
-    /// `\` followed by letters, e.g. `\alpha` (accepted for LaTeX habits).
+    /// `\` followed by a word, e.g. `\alpha` (accepted for LaTeX habits).
     Command,
     /// `\` followed by one non-letter character, e.g. `\;` or `\,`.
     Escape,
@@ -100,7 +101,7 @@ impl Lexer<'_> {
         match c {
             '0'..='9' => self.lex_number(),
             'a'..='z' | 'A'..='Z' => {
-                self.advance_while(|c| c.is_ascii_alphabetic());
+                self.advance_word();
                 TokenKind::Word
             }
             '"' | '`' => self.lex_quote(c),
@@ -117,6 +118,18 @@ impl Lexer<'_> {
     fn single(&mut self, kind: TokenKind) -> TokenKind {
         self.pos += 1;
         kind
+    }
+
+    /// Letters, plus trailing digits if letters and digits together are a
+    /// keyword. Otherwise the digits stay a number, so `x1` is still x₁.
+    fn advance_word(&mut self) {
+        let start = self.pos;
+        self.advance_while(|c| c.is_ascii_alphabetic());
+        let letters_end = self.pos;
+        self.advance_while(|c| c.is_ascii_digit());
+        if self.pos > letters_end && !symbols::is_keyword(&self.source[start..self.pos]) {
+            self.pos = letters_end;
+        }
     }
 
     fn lex_number(&mut self) -> TokenKind {
@@ -148,7 +161,7 @@ impl Lexer<'_> {
         match self.peek_char() {
             None => TokenKind::LoneBackslash,
             Some(c) if c.is_ascii_alphabetic() => {
-                self.advance_while(|c| c.is_ascii_alphabetic());
+                self.advance_word();
                 TokenKind::Command
             }
             Some(c) => {
@@ -160,13 +173,9 @@ impl Lexer<'_> {
 
     fn lex_operator_or_other(&mut self, c: char) -> TokenKind {
         let rest = self.rest();
-        if is_negated_in(rest) {
-            self.pos += 3;
-            return TokenKind::Operator;
-        }
         if let Some(spelling) = MULTI_CHAR_OPERATORS
             .iter()
-            .find(|spelling| rest.starts_with(**spelling))
+            .find(|spelling| starts_with_operator(rest, spelling))
         {
             self.pos += spelling.len();
             return TokenKind::Operator;
@@ -183,9 +192,14 @@ impl Lexer<'_> {
     }
 }
 
-/// `!in` (∉), but not the start of `!int` or similar words.
-fn is_negated_in(rest: &str) -> bool {
-    rest.starts_with("!in") && !rest[3..].starts_with(|c: char| c.is_ascii_alphabetic())
+/// Whether `rest` starts with the operator `spelling`. A spelling ending in a
+/// letter must not run into a word: `!in` (∉), but not the start of `!int`.
+fn starts_with_operator(rest: &str, spelling: &str) -> bool {
+    let Some(after) = rest.strip_prefix(spelling) else {
+        return false;
+    };
+    let ends_in_letter = spelling.ends_with(|c: char| c.is_ascii_alphabetic());
+    !(ends_in_letter && after.starts_with(|c: char| c.is_ascii_alphabetic()))
 }
 
 #[cfg(test)]
@@ -216,6 +230,19 @@ mod tests {
         let tokens = lex("a  b");
         assert!(!tokens[0].has_space_before);
         assert!(tokens[1].has_space_before);
+    }
+
+    #[test]
+    fn digits_join_a_word_only_when_that_makes_a_keyword() {
+        assert_eq!(kinds("integral2"), vec![(TokenKind::Word, "integral2")]);
+        assert_eq!(
+            kinds("\\integral2"),
+            vec![(TokenKind::Command, "\\integral2")]
+        );
+        assert_eq!(
+            kinds("x1"),
+            vec![(TokenKind::Word, "x"), (TokenKind::Number, "1")]
+        );
     }
 
     #[test]

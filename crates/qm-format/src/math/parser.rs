@@ -195,7 +195,7 @@ impl<'a> MathParser<'a> {
                 AtomClass::LargeOperator { .. } => Role::LargeOperator,
                 _ => Role::Plain,
             },
-            Some(Keyword::Prose) => Role::Prose,
+            Some(Keyword::Prose(_)) => Role::Prose,
             Some(Keyword::Over) => Role::Over,
             Some(Keyword::Postfix(symbol)) => Role::Postfix(symbol),
             Some(Keyword::Matrix { .. }) => Role::MatrixWord,
@@ -329,7 +329,7 @@ impl<'a> MathParser<'a> {
             }
             ItemKind::Breaker(Role::Over) => pieces.push(Piece::Over),
             ItemKind::Breaker(Role::Prose) => {
-                push_nodes(pieces, vec![prose_node(self.text(item.start))])
+                push_nodes(pieces, vec![prose_node(self.prose_text(item.start))])
             }
             ItemKind::Breaker(Role::Postfix(symbol)) => attach_postfix(pieces, symbol),
             ItemKind::Breaker(_) => pieces.push(Piece::Boundary(self.parse_leaf(item.start))),
@@ -394,6 +394,14 @@ impl<'a> MathParser<'a> {
             },
             next,
         ))
+    }
+
+    /// The text a prose word shows, as defined in the syntax file.
+    fn prose_text(&self, index: usize) -> &'a str {
+        match self.keyword_at(index) {
+            Some(Keyword::Prose(text)) => text,
+            _ => self.text(index),
+        }
     }
 
     fn is_word(&self, index: usize, word: &str) -> bool {
@@ -605,7 +613,11 @@ impl<'a> MathParser<'a> {
                 ));
                 after
             }
-            Some(Keyword::Prose | Keyword::Over) => {
+            Some(Keyword::Prose(text)) => {
+                nodes.push(prose_node(text));
+                after
+            }
+            Some(Keyword::Over) => {
                 nodes.push(prose_node(self.text(index)));
                 after
             }

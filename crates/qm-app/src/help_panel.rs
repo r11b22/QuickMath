@@ -1,5 +1,5 @@
-//! The help drawer: the notation cheat sheet (click a row to insert it) and
-//! keyboard shortcuts.
+//! The help drawer: the notation cheat sheet and every symbol from the
+//! syntax file (click a row or symbol to insert it), and keyboard shortcuts.
 
 use egui::{RichText, Sense};
 use qm_format::{CheatSheetKind, MathList};
@@ -24,15 +24,31 @@ struct CheatSheetRow {
     math: Option<MathList>,
 }
 
+/// A section of the syntax file, e.g. "Integrals".
+struct SymbolGroup {
+    title: &'static str,
+    symbols: Vec<SymbolEntry>,
+}
+
+/// One word or operator with its example parsed once.
+struct SymbolEntry {
+    spelling: &'static str,
+    /// Inserted on click, e.g. `abs x` for `abs`.
+    example: &'static str,
+    math: MathList,
+}
+
 #[derive(Default)]
 pub struct HelpPanel {
     rows: Option<Vec<CheatSheetRow>>,
+    symbol_groups: Option<Vec<SymbolGroup>>,
 }
 
 impl HelpPanel {
     /// Draws the panel contents; returns notation the user clicked to insert.
     pub fn show(&mut self, ui: &mut egui::Ui, theme: &Theme) -> Option<&'static str> {
         let rows = self.rows.get_or_insert_with(load_rows);
+        let symbol_groups = self.symbol_groups.get_or_insert_with(load_symbol_groups);
         let mut inserted = None;
         ui.heading(RichText::new("Notation").color(theme.text));
         ui.label(
@@ -51,6 +67,10 @@ impl HelpPanel {
                     }
                 }
                 ui.add_space(12.0);
+                if let Some(example) = show_symbol_groups(ui, symbol_groups, theme) {
+                    inserted = Some(example);
+                }
+                ui.add_space(12.0);
                 show_shortcuts(ui, theme);
             });
         inserted
@@ -67,6 +87,24 @@ fn load_rows() -> Vec<CheatSheetRow> {
                 CheatSheetKind::Math => Some(qm_format::parse_math(entry.input)),
                 CheatSheetKind::Markup => None,
             },
+        })
+        .collect()
+}
+
+fn load_symbol_groups() -> Vec<SymbolGroup> {
+    qm_format::vocabulary()
+        .iter()
+        .map(|section| SymbolGroup {
+            title: section.title,
+            symbols: section
+                .entries
+                .iter()
+                .map(|entry| SymbolEntry {
+                    spelling: entry.spelling,
+                    example: entry.example,
+                    math: qm_format::parse_math(entry.example),
+                })
+                .collect(),
         })
         .collect()
 }
@@ -95,7 +133,60 @@ fn show_row(ui: &mut egui::Ui, row: &CheatSheetRow, theme: &Theme) -> egui::Resp
                 .small(),
         );
     });
-    let response = inner.response.interact(Sense::click());
+    make_clickable(ui, inner.response, theme)
+}
+
+/// Lists every symbol from the syntax file in collapsible sections; returns
+/// the example of the symbol the user clicked.
+fn show_symbol_groups(
+    ui: &mut egui::Ui,
+    groups: &[SymbolGroup],
+    theme: &Theme,
+) -> Option<&'static str> {
+    ui.heading(RichText::new("Symbols").color(theme.text));
+    ui.label(
+        RichText::new("Every word and operator defined in syntax.toml.")
+            .color(theme.text_faint)
+            .small(),
+    );
+    let mut inserted = None;
+    for group in groups {
+        egui::CollapsingHeader::new(RichText::new(group.title).color(theme.text_muted))
+            .id_salt(group.title)
+            .show(ui, |ui| {
+                for symbol in &group.symbols {
+                    if show_symbol_entry(ui, symbol, theme).clicked() {
+                        inserted = Some(symbol.example);
+                    }
+                }
+            });
+    }
+    inserted
+}
+
+fn show_symbol_entry(ui: &mut egui::Ui, symbol: &SymbolEntry, theme: &Theme) -> egui::Response {
+    let frame = egui::Frame::new()
+        .inner_margin(egui::Margin::symmetric(8, 2))
+        .corner_radius(crate::theme_style::CORNER_RADIUS);
+    let inner = frame.show(ui, |ui| {
+        ui.set_width(ui.available_width());
+        ui.horizontal(|ui| {
+            ui.label(
+                RichText::new(symbol.spelling)
+                    .monospace()
+                    .color(theme.syntax.math),
+            );
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                qm_render::show_math(ui, &symbol.math, false, theme);
+            });
+        });
+    });
+    make_clickable(ui, inner.response, theme)
+}
+
+/// Outlines `response` on hover and marks it as inserting at the cursor.
+fn make_clickable(ui: &egui::Ui, response: egui::Response, theme: &Theme) -> egui::Response {
+    let response = response.interact(Sense::click());
     if response.hovered() {
         ui.painter().rect_stroke(
             response.rect,
@@ -136,5 +227,30 @@ mod tests {
 
         assert!(heading.math.is_none());
         assert!(fraction.math.is_some());
+    }
+
+    #[test]
+    fn lists_symbols_from_the_syntax_file_with_their_examples() {
+        let groups = load_symbol_groups();
+
+        let integrals = groups
+            .iter()
+            .find(|group| group.title == "Integrals")
+            .unwrap();
+        let fences = groups.iter().find(|group| group.title == "Fences").unwrap();
+        let double_integral = integrals
+            .symbols
+            .iter()
+            .find(|symbol| symbol.spelling == "integral2")
+            .unwrap();
+        let abs = fences
+            .symbols
+            .iter()
+            .find(|symbol| symbol.spelling == "abs")
+            .unwrap();
+
+        assert_eq!(double_integral.example, "integral2");
+        assert!(!double_integral.math.is_empty());
+        assert_eq!(abs.example, "abs x");
     }
 }

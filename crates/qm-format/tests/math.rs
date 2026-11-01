@@ -1,6 +1,8 @@
 //! Math notation behaviour, checked mostly through the LaTeX output.
 
-use qm_format::{math_to_latex, parse_math, AccentKind, AtomClass, AtomStyle, MathNode};
+use qm_format::{
+    math_to_latex, parse_math, vocabulary, AccentKind, AtomClass, AtomStyle, MathNode,
+};
 
 fn latex(source: &str) -> String {
     math_to_latex(&parse_math(source))
@@ -458,6 +460,52 @@ fn cases_split_before_prose_word() {
         latex(source),
         "\\begin{cases}x & \\text{ if }x\\geq0 \\\\ -x & \\text{ otherwise }\\end{cases}"
     );
+}
+
+#[test]
+fn keyword_ending_in_digits_is_one_word() {
+    assert_eq!(latex("integral2 f dA"), "\\iint fdA");
+    assert_eq!(latex("alpha2"), "\\alpha_{2}");
+}
+
+#[test]
+fn every_vocabulary_example_parses_without_errors() {
+    let examples = vocabulary()
+        .iter()
+        .flat_map(|section| section.entries)
+        .map(|entry| entry.example);
+    for example in examples {
+        let parsed = format!("{:?}", parse_math(example));
+        assert!(!parsed.contains("Error {"), "{example}: {parsed}");
+    }
+}
+
+#[test]
+fn vocabulary_covers_every_keyword_once() {
+    let spellings: Vec<&str> = vocabulary()
+        .iter()
+        .flat_map(|section| section.entries)
+        .map(|entry| entry.spelling)
+        .collect();
+    let unique: std::collections::HashSet<&&str> = spellings.iter().collect();
+
+    assert_eq!(unique.len(), spellings.len());
+    for spelling in [
+        "alpha",
+        "<=",
+        "integral2",
+        "abs",
+        "sqrt",
+        "quad",
+        "otherwise",
+    ] {
+        assert!(spellings.contains(&spelling), "{spelling}");
+    }
+}
+
+#[test]
+fn backslash_prose_word_shows_the_word_without_backslash() {
+    assert_eq!(latex("x \\if y"), "x\\text{ if }y");
 }
 
 #[test]

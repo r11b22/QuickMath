@@ -214,7 +214,8 @@ line for display math.
 
 - **Numbers:** `42`, `3.14`. Numbers are upright.
 - **Words:** runs of ASCII letters. A known word is a keyword (`alpha`, `sum`,
-  `sqrt`, `in`, …). An unknown word becomes separate italic letters, the way
+  `sqrt`, `in`, …). A keyword may end in digits (`integral2`); after any
+  other word, digits stay a number, so `x1` is still x₁. An unknown word becomes separate italic letters, the way
   TeX treats it: `xy` is x·y and `dx` is d x. Separate keywords from
   variables with a space: `sin x`, `2 pi r`. `sinx` is s·i·n·x.
 - **Spaces** never render, but they do decide grouping (next section).
@@ -297,7 +298,7 @@ it.
 
 ### Large operators and spoken limits
 
-`sum`, `prod`, `bigcup`, `bigcap`, `int`, `iint`, `iiint`, `oint`, `lim`,
+`sum`, `prod`, `bigcup`, `bigcap`, `int`, `iint`/`integral2`, `iiint`, `oint`, `lim`,
 `limsup`, `liminf`, `max`, `min`, `sup`, `infimum`, `argmax`, `argmin`.
 
 Limits can be written with `_` and `^` (`sum_[i=1]^n`, `int_0^1`,
@@ -395,6 +396,16 @@ first relation and `\\` between rows.
 
 ## Symbol reference
 
+Every keyword and operator spelling below is defined in one data file,
+[`crates/qm-format/src/math/syntax.toml`](../crates/qm-format/src/math/syntax.toml),
+which is compiled into the program. To add syntax, add a line to the right
+section of that file and rebuild; no Rust code changes are needed. For
+example, `integral2 = ["∬", '\iint']` under `[integral]` defines `integral2`
+for the preview and every export. The header of the file explains each
+section. A mistake in the file stops the build with a message naming the
+entry. The editor's Notation panel lists every entry under **Symbols**, so it
+always matches the file.
+
 **Greek:** `alpha beta gamma delta eps/epsilon zeta eta theta vartheta iota kappa
 lambda mu nu xi pi varpi rho varrho sigma varsigma tau upsilon phi chi psi
 omega`. Lowercase Greek letters are italic. Capitals are upright: `Gamma Delta
@@ -430,7 +441,9 @@ Im`.
 
 ## Cheat sheet
 
-The editor's help panel shows the same examples (from `qm_format::cheat_sheet()`).
+The editor's help panel shows the same examples (from `qm_format::cheat_sheet()`),
+followed by every word and operator in the syntax file (from
+`qm_format::vocabulary()`).
 Math inputs are written as they appear between `;;`.
 
 | QuickMath | Result | LaTeX |

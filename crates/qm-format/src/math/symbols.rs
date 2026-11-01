@@ -7,6 +7,7 @@ use std::sync::OnceLock;
 
 use crate::ast::{AccentKind, Atom, AtomClass, AtomStyle, SpaceWidth};
 use crate::math::latex::escape_text;
+use crate::{VocabularyEntry, VocabularySection};
 
 /// A fixed symbol from the tables below.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -62,7 +63,7 @@ pub(crate) enum Keyword {
     /// `x sq`, `x cb`, `A inv`: a superscript attached to the previous term.
     Postfix(Symbol),
     /// Prose inside math such as `if` or `otherwise`, shown as upright text.
-    Prose,
+    Prose(&'static str),
 }
 
 const fn symbol(
@@ -83,22 +84,6 @@ const fn ordinary(text: &'static str, latex: &'static str) -> Symbol {
     symbol(text, latex, AtomClass::Ordinary, AtomStyle::Upright)
 }
 
-const fn greek(text: &'static str, latex: &'static str) -> Symbol {
-    symbol(text, latex, AtomClass::Ordinary, AtomStyle::Italic)
-}
-
-const fn relation(text: &'static str, latex: &'static str) -> Symbol {
-    symbol(text, latex, AtomClass::Relation, AtomStyle::Upright)
-}
-
-const fn binary(text: &'static str, latex: &'static str) -> Symbol {
-    symbol(text, latex, AtomClass::Binary, AtomStyle::Upright)
-}
-
-const fn punctuation(text: &'static str, latex: &'static str) -> Symbol {
-    symbol(text, latex, AtomClass::Punctuation, AtomStyle::Upright)
-}
-
 const fn large(text: &'static str, latex: &'static str, limits: bool) -> Symbol {
     symbol(
         text,
@@ -108,377 +93,17 @@ const fn large(text: &'static str, latex: &'static str, limits: bool) -> Symbol 
     )
 }
 
-/// Function names (`sin`, `det`) are operator atoms like TeX's `\mathop`, so
-/// renderers space them from their argument; their scripts never go above.
-const fn function(text: &'static str, latex: &'static str) -> Symbol {
-    large(text, latex, false)
-}
-
-const fn sym(symbol: Symbol) -> Keyword {
-    Keyword::Symbol(symbol)
-}
-
-pub(crate) const INFINITY: Symbol = ordinary("∞", "\\infty");
 pub(crate) const INFIMUM: Symbol = large("inf", "\\inf", true);
 pub(crate) const PRIME: Symbol = ordinary("′", "\\prime");
 /// `*` used as a script (`z^*`) means the conjugate star, not a centred dot.
 pub(crate) const ASTERISK: Symbol = ordinary("∗", "*");
-const TWO: Symbol = ordinary("2", "2");
-const THREE: Symbol = ordinary("3", "3");
-const MINUS_ONE: Symbol = ordinary("−1", "-1");
 
-/// Word → meaning. Earlier entries win when several words share a Unicode
-/// text, which decides the LaTeX used for directly typed Unicode symbols.
-static KEYWORDS: &[(&str, Keyword)] = &[
-    // Greek, lowercase (italic like TeX).
-    ("alpha", sym(greek("α", "\\alpha"))),
-    ("beta", sym(greek("β", "\\beta"))),
-    ("gamma", sym(greek("γ", "\\gamma"))),
-    ("delta", sym(greek("δ", "\\delta"))),
-    ("eps", sym(greek("ε", "\\varepsilon"))),
-    ("epsilon", sym(greek("ε", "\\varepsilon"))),
-    ("varepsilon", sym(greek("ε", "\\varepsilon"))),
-    ("zeta", sym(greek("ζ", "\\zeta"))),
-    ("eta", sym(greek("η", "\\eta"))),
-    ("theta", sym(greek("θ", "\\theta"))),
-    ("vartheta", sym(greek("ϑ", "\\vartheta"))),
-    ("iota", sym(greek("ι", "\\iota"))),
-    ("kappa", sym(greek("κ", "\\kappa"))),
-    ("lambda", sym(greek("λ", "\\lambda"))),
-    ("lamda", sym(greek("λ", "\\lambda"))),
-    ("mu", sym(greek("μ", "\\mu"))),
-    ("nu", sym(greek("ν", "\\nu"))),
-    ("xi", sym(greek("ξ", "\\xi"))),
-    ("pi", sym(greek("π", "\\pi"))),
-    ("varpi", sym(greek("ϖ", "\\varpi"))),
-    ("rho", sym(greek("ρ", "\\rho"))),
-    ("varrho", sym(greek("ϱ", "\\varrho"))),
-    ("sigma", sym(greek("σ", "\\sigma"))),
-    ("varsigma", sym(greek("ς", "\\varsigma"))),
-    ("tau", sym(greek("τ", "\\tau"))),
-    ("upsilon", sym(greek("υ", "\\upsilon"))),
-    ("phi", sym(greek("φ", "\\varphi"))),
-    ("varphi", sym(greek("φ", "\\varphi"))),
-    ("chi", sym(greek("χ", "\\chi"))),
-    ("psi", sym(greek("ψ", "\\psi"))),
-    ("omega", sym(greek("ω", "\\omega"))),
-    // Greek, uppercase (upright like TeX).
-    ("Gamma", sym(ordinary("Γ", "\\Gamma"))),
-    ("Delta", sym(ordinary("Δ", "\\Delta"))),
-    ("Theta", sym(ordinary("Θ", "\\Theta"))),
-    ("Lambda", sym(ordinary("Λ", "\\Lambda"))),
-    ("Xi", sym(ordinary("Ξ", "\\Xi"))),
-    ("Pi", sym(ordinary("Π", "\\Pi"))),
-    ("Sigma", sym(ordinary("Σ", "\\Sigma"))),
-    ("Upsilon", sym(ordinary("Υ", "\\Upsilon"))),
-    ("Phi", sym(ordinary("Φ", "\\Phi"))),
-    ("Psi", sym(ordinary("Ψ", "\\Psi"))),
-    ("Omega", sym(ordinary("Ω", "\\Omega"))),
-    // Letter-like symbols. `inf` is special-cased by the parser (∞ vs infimum).
-    ("oo", sym(INFINITY)),
-    ("inf", sym(INFINITY)),
-    ("infty", sym(INFINITY)),
-    ("del", sym(ordinary("∂", "\\partial"))),
-    ("partial", sym(ordinary("∂", "\\partial"))),
-    ("grad", sym(ordinary("∇", "\\nabla"))),
-    ("nabla", sym(ordinary("∇", "\\nabla"))),
-    ("RR", sym(ordinary("ℝ", "\\mathbb{R}"))),
-    ("NN", sym(ordinary("ℕ", "\\mathbb{N}"))),
-    ("ZZ", sym(ordinary("ℤ", "\\mathbb{Z}"))),
-    ("QQ", sym(ordinary("ℚ", "\\mathbb{Q}"))),
-    ("CC", sym(ordinary("ℂ", "\\mathbb{C}"))),
-    ("forall", sym(ordinary("∀", "\\forall"))),
-    ("exists", sym(ordinary("∃", "\\exists"))),
-    ("nexists", sym(ordinary("∄", "\\nexists"))),
-    ("not", sym(ordinary("¬", "\\neg"))),
-    ("neg", sym(ordinary("¬", "\\neg"))),
-    ("emptyset", sym(ordinary("∅", "\\emptyset"))),
-    ("empty", sym(ordinary("∅", "\\emptyset"))),
-    ("aleph", sym(ordinary("ℵ", "\\aleph"))),
-    ("hbar", sym(ordinary("ℏ", "\\hbar"))),
-    ("ell", sym(ordinary("ℓ", "\\ell"))),
-    ("angle", sym(ordinary("∠", "\\angle"))),
-    ("triangle", sym(ordinary("△", "\\triangle"))),
-    ("qed", sym(ordinary("∎", "\\blacksquare"))),
-    ("ldots", sym(ordinary("…", "\\ldots"))),
-    ("dots", sym(ordinary("…", "\\ldots"))),
-    ("cdots", sym(ordinary("⋯", "\\cdots"))),
-    ("vdots", sym(ordinary("⋮", "\\vdots"))),
-    ("ddots", sym(ordinary("⋱", "\\ddots"))),
-    // Relations and arrows.
-    ("in", sym(relation("∈", "\\in"))),
-    ("notin", sym(relation("∉", "\\notin"))),
-    ("sub", sym(relation("⊂", "\\subset"))),
-    ("subset", sym(relation("⊂", "\\subset"))),
-    ("sube", sym(relation("⊆", "\\subseteq"))),
-    ("subseteq", sym(relation("⊆", "\\subseteq"))),
-    ("supset", sym(relation("⊃", "\\supset"))),
-    ("supe", sym(relation("⊇", "\\supseteq"))),
-    ("supseteq", sym(relation("⊇", "\\supseteq"))),
-    ("leq", sym(relation("≤", "\\leq"))),
-    ("le", sym(relation("≤", "\\leq"))),
-    ("geq", sym(relation("≥", "\\geq"))),
-    ("ge", sym(relation("≥", "\\geq"))),
-    ("neq", sym(relation("≠", "\\neq"))),
-    ("ne", sym(relation("≠", "\\neq"))),
-    ("approx", sym(relation("≈", "\\approx"))),
-    ("equiv", sym(relation("≡", "\\equiv"))),
-    ("sim", sym(relation("∼", "\\sim"))),
-    ("simeq", sym(relation("≃", "\\simeq"))),
-    ("cong", sym(relation("≅", "\\cong"))),
-    ("prop", sym(relation("∝", "\\propto"))),
-    ("propto", sym(relation("∝", "\\propto"))),
-    ("perp", sym(relation("⊥", "\\perp"))),
-    ("parallel", sym(relation("∥", "\\parallel"))),
-    ("to", sym(relation("→", "\\to"))),
-    ("mapsto", sym(relation("↦", "\\mapsto"))),
-    ("implies", sym(relation("⇒", "\\implies"))),
-    ("iff", sym(relation("⇔", "\\iff"))),
-    ("ll", sym(relation("≪", "\\ll"))),
-    ("gg", sym(relation("≫", "\\gg"))),
-    ("mid", sym(relation("∣", "\\mid"))),
-    ("therefore", sym(relation("∴", "\\therefore"))),
-    ("because", sym(relation("∵", "\\because"))),
-    // Binary operators.
-    ("xx", sym(binary("×", "\\times"))),
-    ("times", sym(binary("×", "\\times"))),
-    ("cdot", sym(binary("⋅", "\\cdot"))),
-    ("div", sym(binary("÷", "\\div"))),
-    ("pm", sym(binary("±", "\\pm"))),
-    ("mp", sym(binary("∓", "\\mp"))),
-    ("cup", sym(binary("∪", "\\cup"))),
-    ("cap", sym(binary("∩", "\\cap"))),
-    ("and", sym(binary("∧", "\\wedge"))),
-    ("wedge", sym(binary("∧", "\\wedge"))),
-    ("or", sym(binary("∨", "\\vee"))),
-    ("vee", sym(binary("∨", "\\vee"))),
-    ("setminus", sym(binary("∖", "\\setminus"))),
-    ("circ", sym(binary("∘", "\\circ"))),
-    ("ox", sym(binary("⊗", "\\otimes"))),
-    ("otimes", sym(binary("⊗", "\\otimes"))),
-    ("oplus", sym(binary("⊕", "\\oplus"))),
-    ("star", sym(binary("⋆", "\\star"))),
-    ("mod", sym(binary("mod", "\\bmod"))),
-    // Large operators.
-    ("sum", sym(large("∑", "\\sum", true))),
-    ("prod", sym(large("∏", "\\prod", true))),
-    ("bigcup", sym(large("⋃", "\\bigcup", true))),
-    ("bigcap", sym(large("⋂", "\\bigcap", true))),
-    ("int", sym(large("∫", "\\int", false))),
-    ("iint", sym(large("∬", "\\iint", false))),
-    ("iiint", sym(large("∭", "\\iiint", false))),
-    ("oint", sym(large("∮", "\\oint", false))),
-    ("lim", sym(large("lim", "\\lim", true))),
-    ("limsup", sym(large("lim sup", "\\limsup", true))),
-    ("liminf", sym(large("lim inf", "\\liminf", true))),
-    ("max", sym(large("max", "\\max", true))),
-    ("min", sym(large("min", "\\min", true))),
-    ("sup", sym(large("sup", "\\sup", true))),
-    ("supremum", sym(large("sup", "\\sup", true))),
-    ("infimum", sym(INFIMUM)),
-    (
-        "argmax",
-        sym(large("arg max", "\\operatorname*{arg\\,max}", true)),
-    ),
-    (
-        "argmin",
-        sym(large("arg min", "\\operatorname*{arg\\,min}", true)),
-    ),
-    // Upright function names.
-    ("sin", sym(function("sin", "\\sin"))),
-    ("cos", sym(function("cos", "\\cos"))),
-    ("tan", sym(function("tan", "\\tan"))),
-    ("sec", sym(function("sec", "\\sec"))),
-    ("csc", sym(function("csc", "\\csc"))),
-    ("cot", sym(function("cot", "\\cot"))),
-    ("arcsin", sym(function("arcsin", "\\arcsin"))),
-    ("arccos", sym(function("arccos", "\\arccos"))),
-    ("arctan", sym(function("arctan", "\\arctan"))),
-    ("sinh", sym(function("sinh", "\\sinh"))),
-    ("cosh", sym(function("cosh", "\\cosh"))),
-    ("tanh", sym(function("tanh", "\\tanh"))),
-    ("coth", sym(function("coth", "\\coth"))),
-    ("log", sym(function("log", "\\log"))),
-    ("ln", sym(function("ln", "\\ln"))),
-    ("lg", sym(function("lg", "\\lg"))),
-    ("exp", sym(function("exp", "\\exp"))),
-    ("det", sym(function("det", "\\det"))),
-    ("dim", sym(function("dim", "\\dim"))),
-    ("ker", sym(function("ker", "\\ker"))),
-    ("gcd", sym(function("gcd", "\\gcd"))),
-    ("deg", sym(function("deg", "\\deg"))),
-    ("arg", sym(function("arg", "\\arg"))),
-    ("hom", sym(function("hom", "\\hom"))),
-    ("Pr", sym(function("Pr", "\\Pr"))),
-    ("lcm", sym(function("lcm", "\\operatorname{lcm}"))),
-    ("sgn", sym(function("sgn", "\\operatorname{sgn}"))),
-    ("tr", sym(function("tr", "\\operatorname{tr}"))),
-    ("rank", sym(function("rank", "\\operatorname{rank}"))),
-    ("span", sym(function("span", "\\operatorname{span}"))),
-    ("Re", sym(function("Re", "\\operatorname{Re}"))),
-    ("Im", sym(function("Im", "\\operatorname{Im}"))),
-    // Structures that take an argument.
-    ("sqrt", Keyword::Sqrt),
-    ("root", Keyword::Root),
-    (
-        "abs",
-        Keyword::Fence {
-            open: "|",
-            close: "|",
-        },
-    ),
-    (
-        "norm",
-        Keyword::Fence {
-            open: "‖",
-            close: "‖",
-        },
-    ),
-    (
-        "floor",
-        Keyword::Fence {
-            open: "⌊",
-            close: "⌋",
-        },
-    ),
-    (
-        "ceil",
-        Keyword::Fence {
-            open: "⌈",
-            close: "⌉",
-        },
-    ),
-    (
-        "ang",
-        Keyword::Fence {
-            open: "⟨",
-            close: "⟩",
-        },
-    ),
-    ("hat", Keyword::Accent(AccentKind::Hat)),
-    ("bar", Keyword::Accent(AccentKind::Bar)),
-    ("vec", Keyword::Accent(AccentKind::Vector)),
-    ("dot", Keyword::Accent(AccentKind::Dot)),
-    ("ddot", Keyword::Accent(AccentKind::DoubleDot)),
-    ("tilde", Keyword::Accent(AccentKind::Tilde)),
-    ("cal", Keyword::Font(Font::Calligraphic)),
-    ("bb", Keyword::Font(Font::Bold)),
-    ("bbb", Keyword::Font(Font::Blackboard)),
-    (
-        "cases",
-        Keyword::Matrix {
-            open: "{",
-            close: "",
-        },
-    ),
-    (
-        "mat",
-        Keyword::Matrix {
-            open: "(",
-            close: ")",
-        },
-    ),
-    (
-        "pmat",
-        Keyword::Matrix {
-            open: "(",
-            close: ")",
-        },
-    ),
-    (
-        "bmat",
-        Keyword::Matrix {
-            open: "[",
-            close: "]",
-        },
-    ),
-    (
-        "vmat",
-        Keyword::Matrix {
-            open: "|",
-            close: "|",
-        },
-    ),
-    (
-        "quad",
-        Keyword::Space {
-            width: SpaceWidth::Quad,
-            count: 1,
-        },
-    ),
-    (
-        "qquad",
-        Keyword::Space {
-            width: SpaceWidth::Quad,
-            count: 2,
-        },
-    ),
-    // Pen-order helpers.
-    ("over", Keyword::Over),
-    ("sq", Keyword::Postfix(TWO)),
-    ("cb", Keyword::Postfix(THREE)),
-    ("inv", Keyword::Postfix(MINUS_ONE)),
-    ("if", Keyword::Prose),
-    ("else", Keyword::Prose),
-    ("otherwise", Keyword::Prose),
-    ("for", Keyword::Prose),
-    ("when", Keyword::Prose),
-    ("where", Keyword::Prose),
-];
-
-/// Operator spellings produced by the lexer, longest spellings first within
-/// each shared prefix (the lexer relies on [`MULTI_CHAR_OPERATORS`]).
-static OPERATORS: &[(&str, Symbol)] = &[
-    ("<=>", relation("⇔", "\\Leftrightarrow")),
-    ("|->", relation("↦", "\\mapsto")),
-    ("...", ordinary("…", "\\ldots")),
-    ("!in", relation("∉", "\\notin")),
-    ("->", relation("→", "\\to")),
-    ("<-", relation("←", "\\leftarrow")),
-    ("=>", relation("⇒", "\\Rightarrow")),
-    ("<=", relation("≤", "\\leq")),
-    (">=", relation("≥", "\\geq")),
-    ("!=", relation("≠", "\\neq")),
-    ("~=", relation("≈", "\\approx")),
-    ("==", relation("≡", "\\equiv")),
-    ("+-", binary("±", "\\pm")),
-    ("-+", binary("∓", "\\mp")),
-    ("//", ordinary("/", "/")),
-    ("/=", relation("≠", "\\neq")),
-    ("**", binary("∗", "\\ast")),
-    (":=", relation("≔", ":=")),
-    ("<<", relation("≪", "\\ll")),
-    (">>", relation("≫", "\\gg")),
-    ("||", ordinary("‖", "\\|")),
-    ("+", binary("+", "+")),
-    ("-", binary("−", "-")),
-    ("*", binary("⋅", "\\cdot")),
-    ("=", relation("=", "=")),
-    ("<", relation("<", "<")),
-    (">", relation(">", ">")),
-    ("~", relation("∼", "\\sim")),
-    (":", punctuation(":", ":")),
-    (",", punctuation(",", ",")),
-    (";", punctuation(";", ";")),
-    ("!", ordinary("!", "!")),
-    ("|", ordinary("|", "|")),
-    (".", ordinary(".", ".")),
-    ("?", ordinary("?", "?")),
-    ("@", binary("∘", "\\circ")),
-    ("&", ordinary("&", "\\&")),
-    ("%", ordinary("%", "\\%")),
-    ("#", ordinary("#", "\\#")),
-    ("$", ordinary("$", "\\$")),
-];
-
-/// Multi-character operator spellings, longest first, for the lexer.
-pub(crate) const MULTI_CHAR_OPERATORS: [&str; 20] = [
-    "<=>", "|->", "...", "->", "<-", "=>", "<=", ">=", "!=", "~=", "==", "+-", "-+", "//", "/=",
-    "**", ":=", "<<", ">>", "||",
-];
-
-/// Single characters the lexer turns into operator tokens.
-pub(crate) const SINGLE_CHAR_OPERATORS: &str = "+-*=<>~:,;!|.?@&%#$";
+// `KEYWORDS`, `OPERATORS`, `MULTI_CHAR_OPERATORS`, `SINGLE_CHAR_OPERATORS` and
+// `VOCABULARY` (the help panel's symbol list), generated by `build.rs` from
+// `syntax.toml`, the file to edit to add syntax.
+// Earlier entries win when several share a Unicode text, which decides the
+// LaTeX used for directly typed Unicode symbols.
+include!(concat!(env!("OUT_DIR"), "/syntax_tables.rs"));
 
 /// Whether an operator takes spoken limits (`sum i=1 to n`, `lim x to 0`).
 /// Function names such as `sin` are operators too but never do.
@@ -547,12 +172,17 @@ fn symbols_by_text() -> &'static FastMap<Symbol> {
     })
 }
 
+/// The syntax file's entries by section, for the help panel.
+pub(crate) fn vocabulary() -> &'static [VocabularySection] {
+    VOCABULARY
+}
+
 /// Looks up a math keyword such as `alpha`, `sum` or `sqrt`.
 pub(crate) fn keyword(word: &str) -> Option<Keyword> {
     keyword_table().get(word).copied()
 }
 
-/// Whether `word` has a meaning of its own (used by the highlighter).
+/// Whether `word` has a meaning of its own (used by the lexer and highlighter).
 pub(crate) fn is_keyword(word: &str) -> bool {
     keyword_table().contains_key(word)
 }

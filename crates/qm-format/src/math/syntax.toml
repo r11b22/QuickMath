@@ -1,0 +1,334 @@
+# The QuickMath math vocabulary: every word (`alpha`, `sum`, `sqrt`, …) and
+# operator spelling (`<=`, `->`, …) the parser knows, with its Unicode and
+# LaTeX forms.
+#
+# This file is compiled into the program: `build.rs` checks it and turns it
+# into Rust tables, so a mistake here fails the build with a message naming
+# the entry. To add syntax, add a line to the right section and rebuild; see
+# `integral2` in [integral] for an example. Every renderer and exporter
+# (preview, PDF, LaTeX, Obsidian) picks it up, and the editor's Notation panel
+# lists it under Symbols, grouped by section.
+#
+# Spellings
+#   - A word is ASCII letters, optionally followed by digits (`integral2`).
+#     Digits after a word that is not defined here stay a subscript, so `x2`
+#     is still x₂. Every word also works in backslash form: `\alpha`.
+#   - An operator is ASCII punctuation such as `<=`; it may end in letters
+#     (`!in`), in which case it only matches when no letter follows. Operators
+#     may only appear in the letter, symbol, relation, binary and punctuation
+#     sections. An operator cannot start with ( ) [ ] { } _ ^ ' " ` or \, and
+#     a lone `/` is the fraction slash.
+#   - Each spelling may be defined once in the whole file.
+#   - Use literal strings ('\alpha') for LaTeX so backslashes need no escaping.
+#
+# Order matters in one place: a Unicode character typed directly (`≤`) gets
+# the LaTeX of the first entry with that text, operators before words.
+#
+# Symbol sections: `spelling = ["Unicode text", 'LaTeX']`
+#   [letter]          italic, like single-letter variables (lowercase Greek)
+#   [symbol]          upright ordinary symbols
+#   [relation]        spaced like `=`; ends a run and is a row's alignment point
+#   [binary]          spaced like `+`
+#   [punctuation]     spaced like `,`; ends a run
+#   [large-operator]  scripts above and below in display math; takes spoken
+#                     limits (`sum i=1 to n`, `lim x to 0`)
+#   [integral]        large, scripts to the side; takes spoken limits
+#   [function]        upright names like `sin`, spaced from their argument;
+#                     scripts to the side and no spoken limits
+#
+# Structure sections (words only):
+#   [structure]  `word = "sqrt" | "root" | "over"`
+#   [fence]      `word = ["open", "close"]`, delimiters around the argument
+#   [accent]     `word = "hat" | "bar" | "vector" | "dot" | "double-dot" | "tilde"`
+#   [font]       `word = "calligraphic" | "bold" | "blackboard"`
+#   [matrix]     `word = ["open", "close"]`; an empty close ("") means none
+#   [space]      `word = { width = "thin" | "medium" | "thick" | "quad", count = n }`
+#   [postfix]    `word = ["text", 'LaTeX']`, a superscript on the previous term
+#   [prose]      `word = "shown text"`, upright prose that ends a run
+#
+# Kept in code because they are grammar rather than vocabulary: `inf`
+# directly followed by `_` means the infimum, `^*` is the conjugate star, and
+# `'` is a prime.
+
+[letter]
+alpha = ["α", '\alpha']
+beta = ["β", '\beta']
+gamma = ["γ", '\gamma']
+delta = ["δ", '\delta']
+eps = ["ε", '\varepsilon']
+epsilon = ["ε", '\varepsilon']
+varepsilon = ["ε", '\varepsilon']
+zeta = ["ζ", '\zeta']
+eta = ["η", '\eta']
+theta = ["θ", '\theta']
+vartheta = ["ϑ", '\vartheta']
+iota = ["ι", '\iota']
+kappa = ["κ", '\kappa']
+lambda = ["λ", '\lambda']
+lamda = ["λ", '\lambda']
+mu = ["μ", '\mu']
+nu = ["ν", '\nu']
+xi = ["ξ", '\xi']
+pi = ["π", '\pi']
+varpi = ["ϖ", '\varpi']
+rho = ["ρ", '\rho']
+varrho = ["ϱ", '\varrho']
+sigma = ["σ", '\sigma']
+varsigma = ["ς", '\varsigma']
+tau = ["τ", '\tau']
+upsilon = ["υ", '\upsilon']
+phi = ["φ", '\varphi']
+varphi = ["φ", '\varphi']
+chi = ["χ", '\chi']
+psi = ["ψ", '\psi']
+omega = ["ω", '\omega']
+
+[symbol]
+"..." = ["…", '\ldots']
+"//" = ["/", "/"]
+"||" = ["‖", '\|']
+"!" = ["!", "!"]
+"|" = ["|", "|"]
+"." = [".", "."]
+"?" = ["?", "?"]
+"&" = ["&", '\&']
+"%" = ["%", '\%']
+"#" = ["#", '\#']
+"$" = ["$", '\$']
+# Uppercase Greek is upright, like TeX.
+Gamma = ["Γ", '\Gamma']
+Delta = ["Δ", '\Delta']
+Theta = ["Θ", '\Theta']
+Lambda = ["Λ", '\Lambda']
+Xi = ["Ξ", '\Xi']
+Pi = ["Π", '\Pi']
+Sigma = ["Σ", '\Sigma']
+Upsilon = ["Υ", '\Upsilon']
+Phi = ["Φ", '\Phi']
+Psi = ["Ψ", '\Psi']
+Omega = ["Ω", '\Omega']
+oo = ["∞", '\infty']
+inf = ["∞", '\infty']
+infty = ["∞", '\infty']
+del = ["∂", '\partial']
+partial = ["∂", '\partial']
+grad = ["∇", '\nabla']
+nabla = ["∇", '\nabla']
+RR = ["ℝ", '\mathbb{R}']
+NN = ["ℕ", '\mathbb{N}']
+ZZ = ["ℤ", '\mathbb{Z}']
+QQ = ["ℚ", '\mathbb{Q}']
+CC = ["ℂ", '\mathbb{C}']
+forall = ["∀", '\forall']
+exists = ["∃", '\exists']
+nexists = ["∄", '\nexists']
+not = ["¬", '\neg']
+neg = ["¬", '\neg']
+emptyset = ["∅", '\emptyset']
+empty = ["∅", '\emptyset']
+aleph = ["ℵ", '\aleph']
+hbar = ["ℏ", '\hbar']
+ell = ["ℓ", '\ell']
+angle = ["∠", '\angle']
+triangle = ["△", '\triangle']
+qed = ["∎", '\blacksquare']
+ldots = ["…", '\ldots']
+dots = ["…", '\ldots']
+cdots = ["⋯", '\cdots']
+vdots = ["⋮", '\vdots']
+ddots = ["⋱", '\ddots']
+
+[relation]
+"<=>" = ["⇔", '\Leftrightarrow']
+"|->" = ["↦", '\mapsto']
+"!in" = ["∉", '\notin']
+"->" = ["→", '\to']
+"<-" = ["←", '\leftarrow']
+"=>" = ["⇒", '\Rightarrow']
+"<=" = ["≤", '\leq']
+">=" = ["≥", '\geq']
+"!=" = ["≠", '\neq']
+"~=" = ["≈", '\approx']
+"==" = ["≡", '\equiv']
+"/=" = ["≠", '\neq']
+":=" = ["≔", ":="]
+"<<" = ["≪", '\ll']
+">>" = ["≫", '\gg']
+"=" = ["=", "="]
+"<" = ["<", "<"]
+">" = [">", ">"]
+"~" = ["∼", '\sim']
+in = ["∈", '\in']
+notin = ["∉", '\notin']
+sub = ["⊂", '\subset']
+subset = ["⊂", '\subset']
+sube = ["⊆", '\subseteq']
+subseteq = ["⊆", '\subseteq']
+supset = ["⊃", '\supset']
+supe = ["⊇", '\supseteq']
+supseteq = ["⊇", '\supseteq']
+leq = ["≤", '\leq']
+le = ["≤", '\leq']
+geq = ["≥", '\geq']
+ge = ["≥", '\geq']
+neq = ["≠", '\neq']
+ne = ["≠", '\neq']
+approx = ["≈", '\approx']
+equiv = ["≡", '\equiv']
+sim = ["∼", '\sim']
+simeq = ["≃", '\simeq']
+cong = ["≅", '\cong']
+prop = ["∝", '\propto']
+propto = ["∝", '\propto']
+perp = ["⊥", '\perp']
+parallel = ["∥", '\parallel']
+to = ["→", '\to']
+mapsto = ["↦", '\mapsto']
+implies = ["⇒", '\implies']
+iff = ["⇔", '\iff']
+ll = ["≪", '\ll']
+gg = ["≫", '\gg']
+mid = ["∣", '\mid']
+therefore = ["∴", '\therefore']
+because = ["∵", '\because']
+
+[binary]
+"+-" = ["±", '\pm']
+"-+" = ["∓", '\mp']
+"**" = ["∗", '\ast']
+"+" = ["+", "+"]
+"-" = ["−", "-"]
+"*" = ["⋅", '\cdot']
+"@" = ["∘", '\circ']
+xx = ["×", '\times']
+times = ["×", '\times']
+cdot = ["⋅", '\cdot']
+div = ["÷", '\div']
+pm = ["±", '\pm']
+mp = ["∓", '\mp']
+cup = ["∪", '\cup']
+cap = ["∩", '\cap']
+and = ["∧", '\wedge']
+wedge = ["∧", '\wedge']
+or = ["∨", '\vee']
+vee = ["∨", '\vee']
+setminus = ["∖", '\setminus']
+circ = ["∘", '\circ']
+ox = ["⊗", '\otimes']
+otimes = ["⊗", '\otimes']
+oplus = ["⊕", '\oplus']
+star = ["⋆", '\star']
+mod = ["mod", '\bmod']
+
+[punctuation]
+":" = [":", ":"]
+"," = [",", ","]
+";" = [";", ";"]
+
+[large-operator]
+sum = ["∑", '\sum']
+prod = ["∏", '\prod']
+bigcup = ["⋃", '\bigcup']
+bigcap = ["⋂", '\bigcap']
+lim = ["lim", '\lim']
+limsup = ["lim sup", '\limsup']
+liminf = ["lim inf", '\liminf']
+max = ["max", '\max']
+min = ["min", '\min']
+sup = ["sup", '\sup']
+supremum = ["sup", '\sup']
+infimum = ["inf", '\inf']
+argmax = ["arg max", '\operatorname*{arg\,max}']
+argmin = ["arg min", '\operatorname*{arg\,min}']
+
+[integral]
+int = ["∫", '\int']
+iint = ["∬", '\iint']
+iiint = ["∭", '\iiint']
+oint = ["∮", '\oint']
+integral2 = ["∬", '\iint']
+
+[function]
+sin = ["sin", '\sin']
+cos = ["cos", '\cos']
+tan = ["tan", '\tan']
+sec = ["sec", '\sec']
+csc = ["csc", '\csc']
+cot = ["cot", '\cot']
+arcsin = ["arcsin", '\arcsin']
+arccos = ["arccos", '\arccos']
+arctan = ["arctan", '\arctan']
+sinh = ["sinh", '\sinh']
+cosh = ["cosh", '\cosh']
+tanh = ["tanh", '\tanh']
+coth = ["coth", '\coth']
+log = ["log", '\log']
+ln = ["ln", '\ln']
+lg = ["lg", '\lg']
+exp = ["exp", '\exp']
+det = ["det", '\det']
+dim = ["dim", '\dim']
+ker = ["ker", '\ker']
+gcd = ["gcd", '\gcd']
+deg = ["deg", '\deg']
+arg = ["arg", '\arg']
+hom = ["hom", '\hom']
+Pr = ["Pr", '\Pr']
+lcm = ["lcm", '\operatorname{lcm}']
+sgn = ["sgn", '\operatorname{sgn}']
+tr = ["tr", '\operatorname{tr}']
+rank = ["rank", '\operatorname{rank}']
+span = ["span", '\operatorname{span}']
+Re = ["Re", '\operatorname{Re}']
+Im = ["Im", '\operatorname{Im}']
+
+[structure]
+sqrt = "sqrt"
+root = "root"
+# `a + b over c + d`: a fraction of everything around it, bounded by
+# relations, punctuation and the enclosing group.
+over = "over"
+
+[fence]
+abs = ["|", "|"]
+norm = ["‖", "‖"]
+floor = ["⌊", "⌋"]
+ceil = ["⌈", "⌉"]
+ang = ["⟨", "⟩"]
+
+[accent]
+hat = "hat"
+bar = "bar"
+vec = "vector"
+dot = "dot"
+ddot = "double-dot"
+tilde = "tilde"
+
+[font]
+cal = "calligraphic"
+bb = "bold"
+bbb = "blackboard"
+
+[matrix]
+cases = ["{", ""]
+mat = ["(", ")"]
+pmat = ["(", ")"]
+bmat = ["[", "]"]
+vmat = ["|", "|"]
+
+[space]
+quad = { width = "quad", count = 1 }
+qquad = { width = "quad", count = 2 }
+
+[postfix]
+sq = ["2", "2"]
+cb = ["3", "3"]
+inv = ["−1", "-1"]
+
+[prose]
+if = "if"
+else = "else"
+otherwise = "otherwise"
+for = "for"
+when = "when"
+where = "where"

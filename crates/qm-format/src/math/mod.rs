@@ -7,6 +7,7 @@ mod symbols;
 
 pub(crate) use latex::{display_math_to_latex, math_to_latex};
 pub(crate) use parser::parse_math;
+pub(crate) use symbols::vocabulary;
 
 use crate::ast::{AtomClass, MathList, MathNode, MathRow};
 use crate::highlight::SpanSink;

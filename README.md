@@ -53,7 +53,7 @@ cargo test --workspace
 
 | Crate | Responsibility |
 |---|---|
-| `crates/qm-format` | The `.qm` notation: parser, syntax tree (`src/ast.rs`), LaTeX conversion, highlighting |
+| `crates/qm-format` | The `.qm` notation: parser, syntax tree (`src/ast.rs`), math vocabulary (`src/math/syntax.toml`), LaTeX conversion, highlighting |
 | `crates/qm-core` | Projects, note storage, settings, Obsidian/LaTeX/PDF exporters |
 | `crates/qm-render` | Math typesetting and document preview on egui |
 | `crates/qm-app` | The eframe desktop app (binary `quick-math`) |

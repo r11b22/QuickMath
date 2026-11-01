@@ -71,6 +71,29 @@ pub fn cheat_sheet() -> &'static [CheatSheetEntry] {
     cheat_sheet::CHEAT_SHEET
 }
 
+/// One section of the math vocabulary defined in `src/math/syntax.toml`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct VocabularySection {
+    /// Display title, e.g. `"Integrals"`.
+    pub title: &'static str,
+    pub entries: &'static [VocabularyEntry],
+}
+
+/// One word or operator spelling from the syntax file.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct VocabularyEntry {
+    /// What the user types, e.g. `"iint"` or `"<="`.
+    pub spelling: &'static str,
+    /// Math input showing the entry in use, e.g. `"abs x"` for `abs`.
+    pub example: &'static str,
+}
+
+/// Every keyword and operator from the syntax file, by section in file order,
+/// so the help panel always lists exactly what the parser understands.
+pub fn vocabulary() -> &'static [VocabularySection] {
+    math::vocabulary()
+}
+
 /// Syntax-highlighting category for a byte range of the source.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TokenKind {
