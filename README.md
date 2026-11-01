@@ -1,5 +1,10 @@
 # QuickMath
 
+## Disclaimer
+This application was made entirely by an LLM. I did not code this and i do not take credit for the code written. I do take responsibility for its work though.
+
+## Description
+
 A desktop editor for taking math notes during lectures, written entirely in Rust.
 Notes are plain-text `.qm` files in a notation built for typing speed: no `$`,
 no backslashes, no braces, and formulas are typed left to right in the order
