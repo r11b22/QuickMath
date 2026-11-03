@@ -1,5 +1,6 @@
 //! The slides pane: a slide deck (PDF) from the project shown one page at a
-//! time next to the notes, with a deck picker and page buttons.
+//! time next to the notes, with a deck picker, page buttons and a page
+//! number field to jump straight to a page.
 
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -18,7 +19,9 @@ const MAX_RENDER_WIDTH: u32 = 4096;
 const DEFAULT_PAGE_ASPECT: f32 = 9.0 / 16.0;
 /// Rendered pages further than this from the current page are dropped.
 const KEPT_PAGES_AROUND: usize = 2;
-const PICKER_RESERVED_WIDTH: f32 = 130.0;
+const PICKER_RESERVED_WIDTH: f32 = 150.0;
+/// Wide enough for a four-digit page number.
+const PAGE_FIELD_WIDTH: f32 = 36.0;
 
 /// What the user did in the pane, for the workspace to handle.
 #[derive(Debug, Clone, PartialEq)]
@@ -45,6 +48,8 @@ struct OpenDeck {
     textures: HashMap<usize, PageTexture>,
     /// Requests sent and not answered yet, as `(page, width)`.
     requested: HashSet<(usize, u32)>,
+    /// What the user is typing in the page number field, while it has focus.
+    typed_page: Option<String>,
 }
 
 struct PageTexture {
@@ -162,9 +167,9 @@ impl SlidesPane {
         picked
     }
 
-    /// Laid out right to left: next, page number, previous.
+    /// Laid out right to left: next, page count, page number field, previous.
     fn show_page_buttons(&mut self, ui: &mut egui::Ui, theme: &Theme) {
-        let Some(deck) = &self.deck else {
+        let Some(deck) = &mut self.deck else {
             return;
         };
         let Some(page_count) = deck.page_count else {
@@ -174,17 +179,16 @@ impl SlidesPane {
         let next = ui
             .add_enabled(!is_last, egui::Button::new("▶"))
             .on_hover_text("Next slide (Ctrl+Page Down)");
-        ui.label(
-            RichText::new(format!("{} / {page_count}", deck.page + 1)).color(theme.text_muted),
-        );
+        ui.label(RichText::new(format!("/ {page_count}")).color(theme.text_muted));
+        deck.show_page_field(ui);
         let previous = ui
             .add_enabled(deck.page > 0, egui::Button::new("◀"))
             .on_hover_text("Previous slide (Ctrl+Page Up)");
         if next.clicked() {
-            self.next_page();
+            deck.go_to(deck.page + 1);
         }
         if previous.clicked() {
-            self.previous_page();
+            deck.go_to(deck.page.saturating_sub(1));
         }
     }
 }
@@ -199,6 +203,32 @@ impl OpenDeck {
             failure: None,
             textures: HashMap::new(),
             requested: HashSet::new(),
+            typed_page: None,
+        }
+    }
+
+    /// The current page number, editable: Enter goes to the typed page,
+    /// leaving the field any other way (Escape, clicking away) discards it.
+    fn show_page_field(&mut self, ui: &mut egui::Ui) {
+        let mut text = self
+            .typed_page
+            .clone()
+            .unwrap_or_else(|| (self.page + 1).to_string());
+        let response = ui
+            .add(
+                egui::TextEdit::singleline(&mut text)
+                    .desired_width(PAGE_FIELD_WIDTH)
+                    .horizontal_align(Align::Center),
+            )
+            .on_hover_text("Type a page number and press Enter");
+        if response.lost_focus() {
+            let is_confirmed = ui.input(|input| input.key_pressed(egui::Key::Enter));
+            if let Some(page) = parse_page_number(&text).filter(|_| is_confirmed) {
+                self.go_to(page);
+            }
+            self.typed_page = None;
+        } else if response.has_focus() {
+            self.typed_page = Some(text);
         }
     }
 
@@ -291,6 +321,13 @@ impl OpenDeck {
     }
 }
 
+/// The page index for a page number typed by the user (counting from 1).
+/// `None` when the text is not a page number.
+fn parse_page_number(text: &str) -> Option<usize> {
+    let number: usize = text.trim().parse().ok()?;
+    number.checked_sub(1)
+}
+
 fn load_texture(
     ctx: &egui::Context,
     deck: &Path,
@@ -364,6 +401,19 @@ mod tests {
         pane.next_page();
         pane.next_page();
         assert_eq!(pane.current(), Some(slides("/v/a.pdf", 2)));
+    }
+
+    #[test]
+    fn typed_page_numbers_count_from_one() {
+        assert_eq!(parse_page_number("1"), Some(0));
+        assert_eq!(parse_page_number(" 42 "), Some(41));
+    }
+
+    #[test]
+    fn typed_text_that_is_not_a_page_number_is_rejected() {
+        for text in ["", "0", "-3", "abc", "4.5", "1 2"] {
+            assert_eq!(parse_page_number(text), None, "{text:?}");
+        }
     }
 
     #[test]

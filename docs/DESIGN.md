@@ -519,6 +519,8 @@ Done in stages, each in its own module:
   default; toggled from the toolbar, the settings window or Ctrl+L.
 - Ctrl+Page Down and Ctrl+Page Up turn the slides while typing. They are
   taken before the editor draws, so the cursor never leaves the editor.
+- The page number between the slide buttons is a text field: typing a page
+  and pressing Enter jumps there; Escape or clicking away keeps the page.
 - Front matter is drawn faint, except empty fields, which get the accent
   colour on a soft accent background.
 - A newly created note opens with the cursor below its front matter.
